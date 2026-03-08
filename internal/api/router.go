@@ -89,7 +89,7 @@ func NewRouter(svc Services) http.Handler {
 		provisioningHandler := v1.NewProvisioningHandler(svc.ProvisioningSvc, svc.Authorizer, svc.AuditLog)
 		provisioningHandler.Register(mux, authMW)
 
-		enrollmentHandler := v1.NewEnrollmentHandler(svc.ProvisioningSvc)
+		enrollmentHandler := v1.NewEnrollmentHandler(svc.ProvisioningSvc, svc.AuditLog)
 		enrollmentHandler.Register(mux) // No auth — token-based.
 	}
 
