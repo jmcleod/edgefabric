@@ -10,6 +10,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/auth"
 	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/storage"
+	"github.com/jmcleod/edgefabric/internal/user"
 )
 
 // errInvalidCredentials matches the error returned by the real auth service.
@@ -170,6 +171,40 @@ func (m *mockAPIKeyStore) DeleteAPIKey(_ context.Context, id domain.ID) error {
 
 func (m *mockAPIKeyStore) UpdateAPIKeyLastUsed(_ context.Context, _ domain.ID) error {
 	return nil
+}
+
+// --- Mock User Service ---
+
+// mockUserService implements user.Service with configurable behavior.
+type mockUserService struct {
+	getFn func(ctx context.Context, id domain.ID) (*domain.User, error)
+}
+
+func (m *mockUserService) Create(_ context.Context, _ user.CreateRequest) (*domain.User, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockUserService) Get(ctx context.Context, id domain.ID) (*domain.User, error) {
+	if m.getFn != nil {
+		return m.getFn(ctx, id)
+	}
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockUserService) GetByEmail(_ context.Context, _ string) (*domain.User, error) {
+	return nil, storage.ErrNotFound
+}
+
+func (m *mockUserService) List(_ context.Context, _ *domain.ID, _ storage.ListParams) ([]*domain.User, int, error) {
+	return nil, 0, nil
+}
+
+func (m *mockUserService) Update(_ context.Context, _ domain.ID, _ user.UpdateRequest) (*domain.User, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockUserService) Delete(_ context.Context, _ domain.ID) error {
+	return fmt.Errorf("not implemented")
 }
 
 // --- Test Token Service ---

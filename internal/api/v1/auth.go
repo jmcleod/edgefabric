@@ -11,6 +11,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/storage"
+	"github.com/jmcleod/edgefabric/internal/user"
 )
 
 // AuthHandler handles authentication and API key endpoints.
@@ -18,17 +19,19 @@ type AuthHandler struct {
 	authSvc    auth.Service
 	tokenSvc   *auth.TokenService
 	apiKeys    storage.APIKeyStore
+	userSvc    user.Service
 	authorizer rbac.Authorizer
 	audit      audit.Logger
 	metrics    *observability.Metrics
 }
 
 // NewAuthHandler creates a new auth handler.
-func NewAuthHandler(authSvc auth.Service, tokenSvc *auth.TokenService, apiKeys storage.APIKeyStore, authorizer rbac.Authorizer, audit audit.Logger, metrics *observability.Metrics) *AuthHandler {
+func NewAuthHandler(authSvc auth.Service, tokenSvc *auth.TokenService, apiKeys storage.APIKeyStore, userSvc user.Service, authorizer rbac.Authorizer, audit audit.Logger, metrics *observability.Metrics) *AuthHandler {
 	return &AuthHandler{
 		authSvc:    authSvc,
 		tokenSvc:   tokenSvc,
 		apiKeys:    apiKeys,
+		userSvc:    userSvc,
 		authorizer: authorizer,
 		audit:      audit,
 		metrics:    metrics,
@@ -41,6 +44,7 @@ func (h *AuthHandler) Register(mux *http.ServeMux, authMW func(http.Handler) htt
 	mux.Handle("POST /api/v1/auth/login", http.HandlerFunc(h.Login))
 
 	// Protected routes.
+	mux.Handle("GET /api/v1/auth/me", middleware.Chain(http.HandlerFunc(h.Me), authMW))
 	mux.Handle("POST /api/v1/auth/totp/verify", middleware.Chain(http.HandlerFunc(h.VerifyTOTP), authMW))
 	mux.Handle("POST /api/v1/auth/totp/enroll", middleware.Chain(http.HandlerFunc(h.EnrollTOTP), authMW))
 	mux.Handle("POST /api/v1/auth/totp/confirm", middleware.Chain(http.HandlerFunc(h.ConfirmTOTP), authMW))
@@ -129,6 +133,23 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	apiutil.JSON(w, http.StatusOK, loginResponse{Token: token, TOTPRequired: false})
+}
+
+// Me handles GET /api/v1/auth/me — returns the current authenticated user.
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims == nil {
+		apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+		return
+	}
+
+	u, err := h.userSvc.Get(r.Context(), claims.UserID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to fetch user profile")
+		return
+	}
+
+	apiutil.JSON(w, http.StatusOK, u)
 }
 
 // totpVerifyRequest is the body of POST /api/v1/auth/totp/verify.

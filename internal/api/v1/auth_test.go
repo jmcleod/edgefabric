@@ -20,8 +20,9 @@ import (
 func newTestAuthHandler(authSvc auth.Service, auditLog *mockAuditLogger) *AuthHandler {
 	tokenSvc := newTestTokenService()
 	apiKeys := &mockAPIKeyStore{}
+	userSvc := &mockUserService{}
 	authorizer := rbac.NewAuthorizer()
-	return NewAuthHandler(authSvc, tokenSvc, apiKeys, authorizer, auditLog, nil)
+	return NewAuthHandler(authSvc, tokenSvc, apiKeys, userSvc, authorizer, auditLog, nil)
 }
 
 func TestLogin_Success(t *testing.T) {
@@ -312,6 +313,77 @@ func TestDeleteAPIKey_Success(t *testing.T) {
 	}
 	if events[0].Resource != "api_key" {
 		t.Errorf("expected audit resource 'api_key', got %q", events[0].Resource)
+	}
+}
+
+func TestMe_Success(t *testing.T) {
+	tenantID := domain.NewID()
+	userID := domain.NewID()
+
+	authSvc := &mockAuthService{}
+	auditLog := newMockAuditLogger()
+	handler := newTestAuthHandler(authSvc, auditLog)
+
+	// Configure the mock user service to return a known user.
+	handler.userSvc.(*mockUserService).getFn = func(_ context.Context, id domain.ID) (*domain.User, error) {
+		if id == userID {
+			return &domain.User{
+				ID:       userID,
+				TenantID: &tenantID,
+				Email:    "admin@example.com",
+				Name:     "Admin User",
+				Role:     domain.RoleAdmin,
+				Status:   domain.UserStatusActive,
+			}, nil
+		}
+		return nil, fmt.Errorf("user not found")
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
+	ctx := middleware.ContextWithClaims(req.Context(), &auth.Claims{
+		UserID:   userID,
+		TenantID: &tenantID,
+		Role:     domain.RoleAdmin,
+	})
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handler.Me(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp apiutil.Response
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %+v", resp.Error)
+	}
+
+	data, ok := resp.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected data to be map, got %T", resp.Data)
+	}
+	if email, ok := data["email"].(string); !ok || email != "admin@example.com" {
+		t.Errorf("expected email 'admin@example.com', got %v", data["email"])
+	}
+	if name, ok := data["name"].(string); !ok || name != "Admin User" {
+		t.Errorf("expected name 'Admin User', got %v", data["name"])
+	}
+}
+
+func TestMe_Unauthenticated(t *testing.T) {
+	authSvc := &mockAuthService{}
+	auditLog := newMockAuditLogger()
+	handler := newTestAuthHandler(authSvc, auditLog)
+
+	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
+	w := httptest.NewRecorder()
+
+	handler.Me(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
