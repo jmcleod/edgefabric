@@ -88,7 +88,11 @@ func RunController(cfg *config.Config) error {
 	)
 	tenantSvc := tenant.NewService(store)
 	userSvc := user.NewService(store, authSvc)
-	fleetSvc := fleet.NewService(store, store, store, store)
+
+	// Initialize event bus for system event broadcasting.
+	eventBus := events.NewBus(logger)
+
+	fleetSvc := fleet.NewService(store, store, store, store, fleet.WithEventBus(eventBus))
 	authorizer := rbac.NewAuthorizer()
 	auditLog := audit.NewLogger(store, logger)
 
@@ -159,11 +163,6 @@ func RunController(cfg *config.Config) error {
 		return fmt.Errorf("bootstrap controller wireguard peer: %w", err)
 	}
 	logger.Info("controller wireguard peer bootstrapped")
-
-	// Initialize event bus for system event broadcasting.
-	// FUTURE: Wire event publishing into fleet heartbeat monitor, provisioning service, etc.
-	eventBus := events.NewBus(logger)
-	_ = eventBus // Bus is available for future wiring; not yet connected to services.
 
 	// Start system gauge updater (refreshes active node/gateway/tenant counts every 15s).
 	gaugeCtx, gaugeCancel := context.WithCancel(context.Background())

@@ -7,24 +7,40 @@ import (
 	"time"
 
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/events"
 	"github.com/jmcleod/edgefabric/internal/storage"
 )
 
 // DefaultService implements the fleet Service interface.
 type DefaultService struct {
-	nodes      storage.NodeStore
-	groups     storage.NodeGroupStore
-	gateways   storage.GatewayStore
-	sshKeys    storage.SSHKeyStore
+	nodes    storage.NodeStore
+	groups   storage.NodeGroupStore
+	gateways storage.GatewayStore
+	sshKeys  storage.SSHKeyStore
+	eventBus *events.Bus // nil-safe; events are published only when set.
 }
 
 // NewService creates a new fleet management service.
-func NewService(nodes storage.NodeStore, groups storage.NodeGroupStore, gateways storage.GatewayStore, sshKeys storage.SSHKeyStore) Service {
-	return &DefaultService{
+func NewService(nodes storage.NodeStore, groups storage.NodeGroupStore, gateways storage.GatewayStore, sshKeys storage.SSHKeyStore, opts ...Option) Service {
+	s := &DefaultService{
 		nodes:    nodes,
 		groups:   groups,
 		gateways: gateways,
 		sshKeys:  sshKeys,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// Option configures the fleet service.
+type Option func(*DefaultService)
+
+// WithEventBus enables event publishing on status transitions.
+func WithEventBus(bus *events.Bus) Option {
+	return func(s *DefaultService) {
+		s.eventBus = bus
 	}
 }
 
@@ -106,7 +122,34 @@ func (s *DefaultService) DeleteNode(ctx context.Context, id domain.ID) error {
 }
 
 func (s *DefaultService) RecordNodeHeartbeat(ctx context.Context, id domain.ID) error {
-	return s.nodes.UpdateNodeHeartbeat(ctx, id)
+	// Read previous status to detect transitions.
+	var previousStatus domain.NodeStatus
+	if s.eventBus != nil {
+		node, err := s.nodes.GetNode(ctx, id)
+		if err == nil {
+			previousStatus = node.Status
+		}
+	}
+
+	if err := s.nodes.UpdateNodeHeartbeat(ctx, id); err != nil {
+		return err
+	}
+
+	// Publish event if the node just came online.
+	if s.eventBus != nil && previousStatus != domain.NodeStatusOnline {
+		s.eventBus.Publish(ctx, events.Event{
+			Type:      events.NodeStatusChanged,
+			Timestamp: time.Now().UTC(),
+			Severity:  events.SeverityInfo,
+			Resource:  "node/" + id.String(),
+			Details: map[string]string{
+				"previous_status": string(previousStatus),
+				"new_status":      string(domain.NodeStatusOnline),
+			},
+		})
+	}
+
+	return nil
 }
 
 // --- Gateways ---
@@ -164,7 +207,34 @@ func (s *DefaultService) DeleteGateway(ctx context.Context, id domain.ID) error 
 }
 
 func (s *DefaultService) RecordGatewayHeartbeat(ctx context.Context, id domain.ID) error {
-	return s.gateways.UpdateGatewayHeartbeat(ctx, id)
+	// Read previous status to detect transitions.
+	var previousStatus domain.GatewayStatus
+	if s.eventBus != nil {
+		gw, err := s.gateways.GetGateway(ctx, id)
+		if err == nil {
+			previousStatus = gw.Status
+		}
+	}
+
+	if err := s.gateways.UpdateGatewayHeartbeat(ctx, id); err != nil {
+		return err
+	}
+
+	// Publish event if the gateway just came online.
+	if s.eventBus != nil && previousStatus != domain.GatewayStatusOnline {
+		s.eventBus.Publish(ctx, events.Event{
+			Type:      events.GatewayStatusChanged,
+			Timestamp: time.Now().UTC(),
+			Severity:  events.SeverityInfo,
+			Resource:  "gateway/" + id.String(),
+			Details: map[string]string{
+				"previous_status": string(previousStatus),
+				"new_status":      string(domain.GatewayStatusOnline),
+			},
+		})
+	}
+
+	return nil
 }
 
 // --- Node Groups ---
