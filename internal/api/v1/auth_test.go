@@ -21,7 +21,7 @@ func newTestAuthHandler(authSvc auth.Service, auditLog *mockAuditLogger) *AuthHa
 	tokenSvc := newTestTokenService()
 	apiKeys := &mockAPIKeyStore{}
 	authorizer := rbac.NewAuthorizer()
-	return NewAuthHandler(authSvc, tokenSvc, apiKeys, authorizer, auditLog)
+	return NewAuthHandler(authSvc, tokenSvc, apiKeys, authorizer, auditLog, nil)
 }
 
 func TestLogin_Success(t *testing.T) {

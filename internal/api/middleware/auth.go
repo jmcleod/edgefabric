@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmcleod/edgefabric/internal/api/apiutil"
 	"github.com/jmcleod/edgefabric/internal/auth"
+	"github.com/jmcleod/edgefabric/internal/observability"
 )
 
 // claimsKey is the context key for authenticated claims.
@@ -34,7 +35,12 @@ func ContextWithClaims(ctx context.Context, claims *auth.Claims) context.Context
 //
 // Security: unauthenticated requests receive 401; the middleware does NOT enforce
 // authorization — use RequirePermission for that.
-func Auth(tokenSvc *auth.TokenService, authSvc auth.Service) func(http.Handler) http.Handler {
+func Auth(tokenSvc *auth.TokenService, authSvc auth.Service, opts ...AuthOption) func(http.Handler) http.Handler {
+	cfg := authConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
@@ -60,6 +66,9 @@ func Auth(tokenSvc *auth.TokenService, authSvc auth.Service) func(http.Handler) 
 			if strings.HasPrefix(token, "ef_") {
 				apiKey, err := authSvc.AuthenticateAPIKey(r.Context(), token)
 				if err != nil {
+					if cfg.metrics != nil {
+						cfg.metrics.AuthFailuresTotal.WithLabelValues("api_key").Inc()
+					}
 					apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid API key")
 					return
 				}
@@ -81,5 +90,20 @@ func Auth(tokenSvc *auth.TokenService, authSvc auth.Service) func(http.Handler) 
 			ctx := context.WithValue(r.Context(), claimsKey{}, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+// authConfig holds optional configuration for the Auth middleware.
+type authConfig struct {
+	metrics *observability.Metrics
+}
+
+// AuthOption configures the Auth middleware.
+type AuthOption func(*authConfig)
+
+// WithMetrics adds Prometheus metrics tracking to the Auth middleware.
+func WithMetrics(m *observability.Metrics) AuthOption {
+	return func(c *authConfig) {
+		c.metrics = m
 	}
 }

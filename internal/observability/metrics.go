@@ -36,6 +36,9 @@ type Metrics struct {
 	// DNS metrics
 	DNSQueriesTotal prometheus.Counter
 	DNSZonesActive  prometheus.Gauge
+
+	// Auth metrics
+	AuthFailuresTotal *prometheus.CounterVec // labels: {type} = login, totp, api_key
 }
 
 // NewMetrics creates and registers all Prometheus metrics.
@@ -135,6 +138,15 @@ func NewMetrics() *Metrics {
 			Name:      "dns_zones_active",
 			Help:      "Number of active DNS zones loaded.",
 		}),
+
+		AuthFailuresTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "auth_failures_total",
+				Help:      "Total authentication failures by type (login, totp, api_key).",
+			},
+			[]string{"type"},
+		),
 	}
 
 	reg.MustRegister(
@@ -152,6 +164,7 @@ func NewMetrics() *Metrics {
 		m.CDNRequestsTotal,
 		m.DNSQueriesTotal,
 		m.DNSZonesActive,
+		m.AuthFailuresTotal,
 	)
 
 	return m

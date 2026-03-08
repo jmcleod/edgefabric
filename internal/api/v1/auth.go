@@ -8,6 +8,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/storage"
 )
@@ -19,16 +20,18 @@ type AuthHandler struct {
 	apiKeys    storage.APIKeyStore
 	authorizer rbac.Authorizer
 	audit      audit.Logger
+	metrics    *observability.Metrics
 }
 
 // NewAuthHandler creates a new auth handler.
-func NewAuthHandler(authSvc auth.Service, tokenSvc *auth.TokenService, apiKeys storage.APIKeyStore, authorizer rbac.Authorizer, audit audit.Logger) *AuthHandler {
+func NewAuthHandler(authSvc auth.Service, tokenSvc *auth.TokenService, apiKeys storage.APIKeyStore, authorizer rbac.Authorizer, audit audit.Logger, metrics *observability.Metrics) *AuthHandler {
 	return &AuthHandler{
 		authSvc:    authSvc,
 		tokenSvc:   tokenSvc,
 		apiKeys:    apiKeys,
 		authorizer: authorizer,
 		audit:      audit,
+		metrics:    metrics,
 	}
 }
 
@@ -82,6 +85,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			Details:  map[string]string{"email": req.Email},
 			SourceIP: r.RemoteAddr,
 		})
+		if h.metrics != nil {
+			h.metrics.AuthFailuresTotal.WithLabelValues("login").Inc()
+		}
 		// Don't leak whether the email exists — always "invalid credentials".
 		apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid credentials")
 		return
@@ -153,6 +159,9 @@ func (h *AuthHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 			Resource: "session",
 			SourceIP: r.RemoteAddr,
 		})
+		if h.metrics != nil {
+			h.metrics.AuthFailuresTotal.WithLabelValues("totp").Inc()
+		}
 		apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid TOTP code")
 		return
 	}

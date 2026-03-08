@@ -52,7 +52,7 @@ func NewRouter(svc Services) http.Handler {
 	mux := http.NewServeMux()
 
 	// Auth middleware (shared by all protected routes).
-	authMW := middleware.Auth(svc.TokenSvc, svc.AuthSvc)
+	authMW := middleware.Auth(svc.TokenSvc, svc.AuthSvc, middleware.WithMetrics(svc.Metrics))
 
 	// Register API v1 handlers.
 	tenantHandler := v1.NewTenantHandler(svc.TenantSvc, svc.Authorizer, svc.AuditLog)
@@ -61,7 +61,7 @@ func NewRouter(svc Services) http.Handler {
 	userHandler := v1.NewUserHandler(svc.UserSvc, svc.Authorizer, svc.AuditLog)
 	userHandler.Register(mux, authMW)
 
-	authHandler := v1.NewAuthHandler(svc.AuthSvc, svc.TokenSvc, svc.APIKeys, svc.Authorizer, svc.AuditLog)
+	authHandler := v1.NewAuthHandler(svc.AuthSvc, svc.TokenSvc, svc.APIKeys, svc.Authorizer, svc.AuditLog, svc.Metrics)
 	authHandler.Register(mux, authMW)
 
 	auditHandler := v1.NewAuditHandler(svc.AuditLog, svc.Authorizer)
