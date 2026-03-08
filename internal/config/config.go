@@ -61,7 +61,8 @@ type WireGuardHub struct {
 
 // SecretsConfig defines how secrets are encrypted at rest.
 type SecretsConfig struct {
-	EncryptionKey string `yaml:"encryption_key"` // base64-encoded AES-256 key
+	EncryptionKey   string `yaml:"encryption_key"`              // base64-encoded AES-256 key
+	TokenSigningKey string `yaml:"token_signing_key,omitempty"` // Separate HMAC key for JWT signing. Falls back to EncryptionKey if empty.
 }
 
 // NodeConfig holds node-specific settings.
@@ -126,7 +127,8 @@ type GatewayConfig struct {
 //	EF_CONTROLLER_EXTERNAL_URL        → controller.external_url
 //	EF_CONTROLLER_STORAGE_DRIVER      → controller.storage.driver
 //	EF_CONTROLLER_STORAGE_DSN         → controller.storage.dsn
-//	EF_CONTROLLER_SECRETS_ENCRYPTION_KEY → controller.secrets.encryption_key
+//	EF_CONTROLLER_SECRETS_ENCRYPTION_KEY   → controller.secrets.encryption_key
+//	EF_CONTROLLER_SECRETS_TOKEN_SIGNING_KEY → controller.secrets.token_signing_key
 //	EF_NODE_CONTROLLER_ADDR           → node.controller_addr
 //	EF_NODE_ENROLLMENT_TOKEN          → node.enrollment_token
 //	EF_NODE_DATA_DIR                  → node.data_dir
@@ -175,6 +177,7 @@ func (c *Config) applyEnvOverrides() {
 	envStr("EF_CONTROLLER_STORAGE_DRIVER", &c.Controller.Storage.Driver)
 	envStr("EF_CONTROLLER_STORAGE_DSN", &c.Controller.Storage.DSN)
 	envStr("EF_CONTROLLER_SECRETS_ENCRYPTION_KEY", &c.Controller.Secrets.EncryptionKey)
+	envStr("EF_CONTROLLER_SECRETS_TOKEN_SIGNING_KEY", &c.Controller.Secrets.TokenSigningKey)
 
 	// Node.
 	envStr("EF_NODE_CONTROLLER_ADDR", &c.Node.ControllerAddr)

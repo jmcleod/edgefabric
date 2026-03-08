@@ -75,8 +75,15 @@ func RunController(cfg *config.Config) error {
 
 	// Initialize services.
 	authSvc := auth.NewService(store, store, secretStore, "EdgeFabric")
+
+	// Use a separate token signing key if configured; fall back to encryption key.
+	signingKey := cfg.Controller.Secrets.TokenSigningKey
+	if signingKey == "" {
+		signingKey = cfg.Controller.Secrets.EncryptionKey
+		logger.Warn("token_signing_key not set, using encryption_key (set separate key for production)")
+	}
 	tokenSvc := auth.NewTokenService(
-		[]byte(cfg.Controller.Secrets.EncryptionKey), // Derive signing key from encryption key.
+		[]byte(signingKey),
 		24*time.Hour,
 	)
 	tenantSvc := tenant.NewService(store)
