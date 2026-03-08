@@ -43,6 +43,13 @@ type Store interface {
 	Ping(ctx context.Context) error
 }
 
+// SchemaVersioner provides access to the schema version tracking system.
+// This is separate from Store to avoid forcing all implementations to
+// implement it — only used by the status endpoint.
+type SchemaVersioner interface {
+	SchemaVersion(ctx context.Context) (int, error)
+}
+
 // ListParams provides common pagination parameters.
 type ListParams struct {
 	Offset int

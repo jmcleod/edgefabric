@@ -40,10 +40,11 @@ type Services struct {
 	AuditLog   audit.Logger
 	APIKeys    storage.APIKeyStore
 	SSHKeys    storage.SSHKeyStore
-	Health     *observability.HealthChecker
-	Metrics    *observability.Metrics
-	Logger     *slog.Logger
-	StaticFS   fs.FS // Embedded SPA files (web.StaticFiles)
+	SchemaVersioner storage.SchemaVersioner
+	Health          *observability.HealthChecker
+	Metrics         *observability.Metrics
+	Logger          *slog.Logger
+	StaticFS        fs.FS // Embedded SPA files (web.StaticFiles)
 }
 
 // NewRouter assembles the full HTTP handler with all middleware and routes.
@@ -74,7 +75,7 @@ func NewRouter(svc Services) http.Handler {
 		nodeGroupHandler := v1.NewNodeGroupHandler(svc.FleetSvc, svc.Authorizer, svc.AuditLog)
 		nodeGroupHandler.Register(mux, authMW)
 
-		statusHandler := v1.NewStatusHandler(svc.TenantSvc, svc.UserSvc, svc.FleetSvc, svc.DNSSvc, svc.CDNSvc, svc.RouteSvc, svc.Authorizer)
+		statusHandler := v1.NewStatusHandler(svc.TenantSvc, svc.UserSvc, svc.FleetSvc, svc.DNSSvc, svc.CDNSvc, svc.RouteSvc, svc.SchemaVersioner, svc.Authorizer)
 		statusHandler.Register(mux, authMW)
 	}
 

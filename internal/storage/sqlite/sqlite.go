@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 
 	_ "modernc.org/sqlite" // Register SQLite driver as "sqlite".
 
@@ -17,6 +18,9 @@ import (
 
 // Ensure SQLiteStore implements storage.Store at compile time.
 var _ storage.Store = (*SQLiteStore)(nil)
+
+// Ensure SQLiteStore implements storage.SchemaVersioner at compile time.
+var _ storage.SchemaVersioner = (*SQLiteStore)(nil)
 
 // SQLiteStore implements storage.Store using SQLite.
 type SQLiteStore struct {
@@ -59,13 +63,66 @@ func (s *SQLiteStore) Ping(ctx context.Context) error {
 }
 
 // Migrate runs database migrations to ensure the schema is current.
+// Migrations are tracked in a schema_versions table so that already-applied
+// migrations are skipped on subsequent runs.
+//
+// FUTURE: Add rollback SQL for migrations.
 func (s *SQLiteStore) Migrate(ctx context.Context) error {
-	for _, stmt := range migrations {
-		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("migration error: %w\nStatement: %s", err, stmt)
+	// Bootstrap the version tracking table (always safe to re-run).
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_versions (
+		version INTEGER PRIMARY KEY,
+		description TEXT NOT NULL,
+		applied_at DATETIME NOT NULL DEFAULT (datetime('now'))
+	)`); err != nil {
+		return fmt.Errorf("create schema_versions table: %w", err)
+	}
+
+	for i, m := range migrations {
+		version := i + 1
+
+		// Check if this migration has already been applied.
+		var exists int
+		if err := s.db.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM schema_versions WHERE version = ?", version,
+		).Scan(&exists); err != nil {
+			return fmt.Errorf("check schema version %d: %w", version, err)
 		}
+		if exists > 0 {
+			continue
+		}
+
+		// Apply the migration.
+		if _, err := s.db.ExecContext(ctx, m.SQL); err != nil {
+			return fmt.Errorf("migration %d (%s): %w", version, m.Description, err)
+		}
+
+		// Record that this migration has been applied.
+		if _, err := s.db.ExecContext(ctx,
+			"INSERT INTO schema_versions (version, description) VALUES (?, ?)",
+			version, m.Description,
+		); err != nil {
+			return fmt.Errorf("record schema version %d: %w", version, err)
+		}
+
+		slog.Info("applied migration",
+			slog.Int("version", version),
+			slog.String("description", m.Description),
+		)
 	}
 	return nil
+}
+
+// SchemaVersion returns the latest applied schema version number.
+// Returns 0 if no migrations have been applied.
+func (s *SQLiteStore) SchemaVersion(ctx context.Context) (int, error) {
+	var version int
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COALESCE(MAX(version), 0) FROM schema_versions",
+	).Scan(&version)
+	if err != nil {
+		return 0, fmt.Errorf("query schema version: %w", err)
+	}
+	return version, nil
 }
 
 // isUniqueViolation checks if an error is a SQLite UNIQUE constraint violation.
@@ -114,10 +171,18 @@ func scanNullString(ns sql.NullString) *string {
 	return &ns.String
 }
 
+// Migration describes a single schema migration step.
+type Migration struct {
+	SQL         string
+	Description string
+}
+
 // migrations contains the SQL DDL for the SQLite schema.
-// These are idempotent CREATE IF NOT EXISTS statements.
-var migrations = []string{
-	`CREATE TABLE IF NOT EXISTS tenants (
+// Each migration is applied at most once, tracked by schema_versions.
+var migrations = []Migration{
+	{
+		Description: "create tenants table",
+		SQL: `CREATE TABLE IF NOT EXISTS tenants (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL UNIQUE,
 		slug TEXT NOT NULL UNIQUE,
@@ -126,8 +191,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS users (
+	{
+		Description: "create users table",
+		SQL: `CREATE TABLE IF NOT EXISTS users (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT REFERENCES tenants(id),
 		email TEXT NOT NULL UNIQUE,
@@ -141,8 +209,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS api_keys (
+	{
+		Description: "create api_keys table",
+		SQL: `CREATE TABLE IF NOT EXISTS api_keys (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		user_id TEXT NOT NULL REFERENCES users(id),
@@ -154,8 +225,11 @@ var migrations = []string{
 		last_used_at DATETIME,
 		created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS ssh_keys (
+	{
+		Description: "create ssh_keys table",
+		SQL: `CREATE TABLE IF NOT EXISTS ssh_keys (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
 		public_key TEXT NOT NULL,
@@ -164,8 +238,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		last_rotated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS nodes (
+	{
+		Description: "create nodes table",
+		SQL: `CREATE TABLE IF NOT EXISTS nodes (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT REFERENCES tenants(id),
 		name TEXT NOT NULL,
@@ -184,14 +261,20 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS node_capabilities (
+	{
+		Description: "create node_capabilities table",
+		SQL: `CREATE TABLE IF NOT EXISTS node_capabilities (
 		node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
 		capability TEXT NOT NULL,
 		PRIMARY KEY (node_id, capability)
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS node_groups (
+	{
+		Description: "create node_groups table",
+		SQL: `CREATE TABLE IF NOT EXISTS node_groups (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		name TEXT NOT NULL,
@@ -199,14 +282,20 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS node_group_memberships (
+	{
+		Description: "create node_group_memberships table",
+		SQL: `CREATE TABLE IF NOT EXISTS node_group_memberships (
 		node_group_id TEXT NOT NULL REFERENCES node_groups(id) ON DELETE CASCADE,
 		node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
 		PRIMARY KEY (node_group_id, node_id)
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS gateways (
+	{
+		Description: "create gateways table",
+		SQL: `CREATE TABLE IF NOT EXISTS gateways (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		name TEXT NOT NULL,
@@ -219,8 +308,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS wireguard_peers (
+	{
+		Description: "create wireguard_peers table",
+		SQL: `CREATE TABLE IF NOT EXISTS wireguard_peers (
 		id TEXT PRIMARY KEY,
 		owner_type TEXT NOT NULL,
 		owner_id TEXT NOT NULL,
@@ -232,14 +324,20 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS wireguard_peer_allowed_ips (
+	{
+		Description: "create wireguard_peer_allowed_ips table",
+		SQL: `CREATE TABLE IF NOT EXISTS wireguard_peer_allowed_ips (
 		peer_id TEXT NOT NULL REFERENCES wireguard_peers(id) ON DELETE CASCADE,
 		allowed_ip TEXT NOT NULL,
 		PRIMARY KEY (peer_id, allowed_ip)
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS ip_allocations (
+	{
+		Description: "create ip_allocations table",
+		SQL: `CREATE TABLE IF NOT EXISTS ip_allocations (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		prefix TEXT NOT NULL,
@@ -249,8 +347,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS bgp_sessions (
+	{
+		Description: "create bgp_sessions table",
+		SQL: `CREATE TABLE IF NOT EXISTS bgp_sessions (
 		id TEXT PRIMARY KEY,
 		node_id TEXT NOT NULL REFERENCES nodes(id),
 		peer_asn INTEGER NOT NULL,
@@ -263,14 +364,20 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS bgp_announced_prefixes (
+	{
+		Description: "create bgp_announced_prefixes table",
+		SQL: `CREATE TABLE IF NOT EXISTS bgp_announced_prefixes (
 		session_id TEXT NOT NULL REFERENCES bgp_sessions(id) ON DELETE CASCADE,
 		prefix TEXT NOT NULL,
 		PRIMARY KEY (session_id, prefix)
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS dns_zones (
+	{
+		Description: "create dns_zones table",
+		SQL: `CREATE TABLE IF NOT EXISTS dns_zones (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		name TEXT NOT NULL,
@@ -281,8 +388,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS dns_records (
+	{
+		Description: "create dns_records table",
+		SQL: `CREATE TABLE IF NOT EXISTS dns_records (
 		id TEXT PRIMARY KEY,
 		zone_id TEXT NOT NULL REFERENCES dns_zones(id) ON DELETE CASCADE,
 		name TEXT NOT NULL,
@@ -295,8 +405,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS cdn_sites (
+	{
+		Description: "create cdn_sites table",
+		SQL: `CREATE TABLE IF NOT EXISTS cdn_sites (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		name TEXT NOT NULL,
@@ -312,14 +425,20 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS cdn_site_domains (
+	{
+		Description: "create cdn_site_domains table",
+		SQL: `CREATE TABLE IF NOT EXISTS cdn_site_domains (
 		site_id TEXT NOT NULL REFERENCES cdn_sites(id) ON DELETE CASCADE,
 		domain TEXT NOT NULL,
 		PRIMARY KEY (site_id, domain)
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS cdn_origins (
+	{
+		Description: "create cdn_origins table",
+		SQL: `CREATE TABLE IF NOT EXISTS cdn_origins (
 		id TEXT PRIMARY KEY,
 		site_id TEXT NOT NULL REFERENCES cdn_sites(id) ON DELETE CASCADE,
 		address TEXT NOT NULL,
@@ -331,8 +450,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS routes (
+	{
+		Description: "create routes table",
+		SQL: `CREATE TABLE IF NOT EXISTS routes (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		name TEXT NOT NULL,
@@ -347,8 +469,11 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS tls_certificates (
+	{
+		Description: "create tls_certificates table",
+		SQL: `CREATE TABLE IF NOT EXISTS tls_certificates (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		cert_pem TEXT NOT NULL,
@@ -359,14 +484,20 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS tls_certificate_domains (
+	{
+		Description: "create tls_certificate_domains table",
+		SQL: `CREATE TABLE IF NOT EXISTS tls_certificate_domains (
 		cert_id TEXT NOT NULL REFERENCES tls_certificates(id) ON DELETE CASCADE,
 		domain TEXT NOT NULL,
 		PRIMARY KEY (cert_id, domain)
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS audit_events (
+	{
+		Description: "create audit_events table",
+		SQL: `CREATE TABLE IF NOT EXISTS audit_events (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT,
 		user_id TEXT,
@@ -377,10 +508,21 @@ var migrations = []string{
 		source_ip TEXT NOT NULL,
 		timestamp DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_audit_events_tenant ON audit_events(tenant_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS enrollment_tokens (
+	{
+		Description: "create audit_events tenant index",
+		SQL:         `CREATE INDEX IF NOT EXISTS idx_audit_events_tenant ON audit_events(tenant_id)`,
+	},
+
+	{
+		Description: "create audit_events timestamp index",
+		SQL:         `CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp)`,
+	},
+
+	{
+		Description: "create enrollment_tokens table",
+		SQL: `CREATE TABLE IF NOT EXISTS enrollment_tokens (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT NOT NULL REFERENCES tenants(id),
 		target_type TEXT NOT NULL,
@@ -390,8 +532,11 @@ var migrations = []string{
 		used_at DATETIME,
 		created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+	},
 
-	`CREATE TABLE IF NOT EXISTS provisioning_jobs (
+	{
+		Description: "create provisioning_jobs table",
+		SQL: `CREATE TABLE IF NOT EXISTS provisioning_jobs (
 		id TEXT PRIMARY KEY,
 		node_id TEXT NOT NULL REFERENCES nodes(id),
 		tenant_id TEXT REFERENCES tenants(id),
@@ -406,7 +551,20 @@ var migrations = []string{
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_node ON provisioning_jobs(node_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_status ON provisioning_jobs(status)`,
-	`CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_node_status ON provisioning_jobs(node_id, status)`,
+	},
+
+	{
+		Description: "create provisioning_jobs node index",
+		SQL:         `CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_node ON provisioning_jobs(node_id)`,
+	},
+
+	{
+		Description: "create provisioning_jobs status index",
+		SQL:         `CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_status ON provisioning_jobs(status)`,
+	},
+
+	{
+		Description: "create provisioning_jobs node+status index",
+		SQL:         `CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_node_status ON provisioning_jobs(node_id, status)`,
+	},
 }

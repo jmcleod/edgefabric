@@ -200,6 +200,7 @@ func RunController(cfg *config.Config) error {
 		AuditLog:        auditLog,
 		APIKeys:         store,
 		SSHKeys:         store,
+		SchemaVersioner: store,
 		Health:          health,
 		Metrics:         metrics,
 		Logger:          logger,

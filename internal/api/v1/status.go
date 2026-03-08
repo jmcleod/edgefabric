@@ -20,13 +20,14 @@ import (
 
 // StatusHandler provides a dashboard/status endpoint with fleet overview.
 type StatusHandler struct {
-	tenantSvc  tenant.Service
-	userSvc    user.Service
-	fleetSvc   fleet.Service
-	dnsSvc     dns.Service
-	cdnSvc     cdn.Service
-	routeSvc   route.Service
-	authorizer rbac.Authorizer
+	tenantSvc       tenant.Service
+	userSvc         user.Service
+	fleetSvc        fleet.Service
+	dnsSvc          dns.Service
+	cdnSvc          cdn.Service
+	routeSvc        route.Service
+	schemaVersioner storage.SchemaVersioner
+	authorizer      rbac.Authorizer
 }
 
 // NewStatusHandler creates a new status handler.
@@ -37,16 +38,18 @@ func NewStatusHandler(
 	dnsSvc dns.Service,
 	cdnSvc cdn.Service,
 	routeSvc route.Service,
+	schemaVersioner storage.SchemaVersioner,
 	authorizer rbac.Authorizer,
 ) *StatusHandler {
 	return &StatusHandler{
-		tenantSvc:  tenantSvc,
-		userSvc:    userSvc,
-		fleetSvc:   fleetSvc,
-		dnsSvc:     dnsSvc,
-		cdnSvc:     cdnSvc,
-		routeSvc:   routeSvc,
-		authorizer: authorizer,
+		tenantSvc:       tenantSvc,
+		userSvc:         userSvc,
+		fleetSvc:        fleetSvc,
+		dnsSvc:          dnsSvc,
+		cdnSvc:          cdnSvc,
+		routeSvc:        routeSvc,
+		schemaVersioner: schemaVersioner,
+		authorizer:      authorizer,
 	}
 }
 
@@ -71,9 +74,10 @@ type statusResponse struct {
 	GatewayCount     int            `json:"gateway_count"`
 	GatewaysByStatus map[string]int `json:"gateways_by_status"`
 
-	RouteCount  int `json:"route_count"`
-	DNSZoneCount int `json:"dns_zone_count"`
-	CDNSiteCount int `json:"cdn_site_count"`
+	RouteCount    int `json:"route_count"`
+	DNSZoneCount  int `json:"dns_zone_count"`
+	CDNSiteCount  int `json:"cdn_site_count"`
+	SchemaVersion int `json:"schema_version"`
 }
 
 // Status handles GET /api/v1/status — returns a fleet overview.
@@ -222,6 +226,16 @@ func (h *StatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
+		}
+	}
+
+	// Schema version.
+	if h.schemaVersioner != nil {
+		sv, err := h.schemaVersioner.SchemaVersion(r.Context())
+		if err != nil {
+			slog.Warn("status: failed to get schema version", slog.String("error", err.Error()))
+		} else {
+			resp.SchemaVersion = sv
 		}
 	}
 
