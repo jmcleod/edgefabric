@@ -19,13 +19,14 @@ import (
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/fleet"
-	"github.com/jmcleod/edgefabric/internal/route"
 	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/provisioning"
 	"github.com/jmcleod/edgefabric/internal/rbac"
+	"github.com/jmcleod/edgefabric/internal/route"
 	"github.com/jmcleod/edgefabric/internal/secrets"
 	"github.com/jmcleod/edgefabric/internal/ssh"
+	"github.com/jmcleod/edgefabric/internal/storage"
 	"github.com/jmcleod/edgefabric/internal/storage/sqlite"
 	"github.com/jmcleod/edgefabric/internal/tenant"
 	"github.com/jmcleod/edgefabric/internal/user"
@@ -150,6 +151,32 @@ func RunController(cfg *config.Config) error {
 		return fmt.Errorf("bootstrap controller wireguard peer: %w", err)
 	}
 	logger.Info("controller wireguard peer bootstrapped")
+
+	// Start system gauge updater (refreshes active node/gateway/tenant counts every 15s).
+	gaugeCtx, gaugeCancel := context.WithCancel(context.Background())
+	defer gaugeCancel()
+	observability.StartGaugeUpdater(gaugeCtx, metrics, 15*time.Second, func(m *observability.Metrics) {
+		_, nodeCount, err := fleetSvc.ListNodes(context.Background(), nil, storage.ListParams{Limit: 1})
+		if err == nil {
+			m.ActiveNodes.Set(float64(nodeCount))
+		}
+		_, tCount, err := tenantSvc.List(context.Background(), storage.ListParams{Limit: 1})
+		if err == nil {
+			m.ActiveTenants.Set(float64(tCount))
+		}
+		// Sum gateway counts across all tenants.
+		var gatewayTotal int
+		tenants, _, err := tenantSvc.List(context.Background(), storage.ListParams{Limit: 200})
+		if err == nil {
+			for _, t := range tenants {
+				_, gCount, err := fleetSvc.ListGateways(context.Background(), t.ID, storage.ListParams{Limit: 1})
+				if err == nil {
+					gatewayTotal += gCount
+				}
+			}
+		}
+		m.ActiveGateways.Set(float64(gatewayTotal))
+	})
 
 	// Assemble API router.
 	handler := api.NewRouter(api.Services{
