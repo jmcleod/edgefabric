@@ -10,6 +10,7 @@ import (
 
 	"github.com/jmcleod/edgefabric/internal/bgp"
 	"github.com/jmcleod/edgefabric/internal/config"
+	"github.com/jmcleod/edgefabric/internal/dnsserver"
 	"github.com/jmcleod/edgefabric/internal/observability"
 )
 
@@ -21,6 +22,7 @@ func RunNode(cfg *config.Config) error {
 	logger.Info("starting edgefabric node",
 		slog.String("controller_addr", cfg.Node.ControllerAddr),
 		slog.Bool("bgp_enabled", cfg.Node.BGP.Enabled),
+		slog.Bool("dns_enabled", cfg.Node.DNS.Enabled),
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -55,11 +57,45 @@ func RunNode(cfg *config.Config) error {
 		}
 	}
 
+	// Initialize DNS service if enabled.
+	var dnsSvc dnsserver.Service
+	if cfg.Node.DNS.Enabled {
+		dnsSvc = initDNSService(cfg.Node.DNS, logger)
+		if dnsSvc != nil {
+			listenAddr := cfg.Node.DNS.ListenAddr
+			if listenAddr == "" {
+				listenAddr = ":5353"
+			}
+
+			if err := dnsSvc.Start(ctx, listenAddr); err != nil {
+				logger.Error("failed to start DNS service", slog.String("error", err.Error()))
+			} else {
+				logger.Info("DNS service started",
+					slog.String("listen_addr", listenAddr),
+					slog.String("mode", cfg.Node.DNS.Mode),
+				)
+
+				// Start DNS reconciliation loop.
+				go dnsReconcileLoop(ctx, dnsSvc, cfg.Node.ControllerAddr, logger)
+			}
+		}
+	}
+
 	// TODO: Connect to controller over WireGuard.
-	// TODO: Start DNS, CDN, Route services as configured.
 
 	<-ctx.Done()
 	logger.Info("shutting down node")
+
+	// Graceful shutdown of DNS.
+	if dnsSvc != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := dnsSvc.Stop(shutdownCtx); err != nil {
+			logger.Error("failed to stop DNS service", slog.String("error", err.Error()))
+		} else {
+			logger.Info("DNS service stopped")
+		}
+	}
 
 	// Graceful shutdown of BGP.
 	if bgpSvc != nil {
@@ -95,6 +131,26 @@ func initBGPService(cfg config.BGPConfig, logger *slog.Logger) bgp.Service {
 	}
 }
 
+// initDNSService creates the appropriate DNS service based on config mode.
+func initDNSService(cfg config.DNSConfig, logger *slog.Logger) dnsserver.Service {
+	mode := cfg.Mode
+	if mode == "" {
+		mode = "noop"
+	}
+
+	switch mode {
+	case "miekg":
+		logger.Info("using miekg/dns authoritative DNS service")
+		return dnsserver.NewMiekgService()
+	case "noop":
+		logger.Info("using noop DNS service (demo mode)")
+		return dnsserver.NewNoopService()
+	default:
+		logger.Error("unknown DNS mode, falling back to noop", slog.String("mode", mode))
+		return dnsserver.NewNoopService()
+	}
+}
+
 // bgpReconcileLoop periodically polls the controller for desired BGP state
 // and reconciles the local BGP service to match. Runs every 30 seconds.
 func bgpReconcileLoop(ctx context.Context, svc bgp.Service, controllerAddr string, logger *slog.Logger) {
@@ -110,6 +166,27 @@ func bgpReconcileLoop(ctx context.Context, svc bgp.Service, controllerAddr strin
 			// and call svc.Reconcile(ctx, sessions).
 			// For now, just log that reconciliation would happen.
 			logger.Debug("BGP reconciliation tick",
+				slog.String("controller", controllerAddr),
+			)
+		}
+	}
+}
+
+// dnsReconcileLoop periodically polls the controller for desired DNS state
+// and reconciles the local DNS service to match. Runs every 30 seconds.
+func dnsReconcileLoop(ctx context.Context, svc dnsserver.Service, controllerAddr string, logger *slog.Logger) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// TODO: Poll GET /api/v1/nodes/{id}/config/dns from controller
+			// and call svc.Reconcile(ctx, config).
+			// For now, just log that reconciliation would happen.
+			logger.Debug("DNS reconciliation tick",
 				slog.String("controller", controllerAddr),
 			)
 		}
