@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -race -count=1 ./...
+
+      - name: Build static binary (Linux amd64)
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          MODULE="github.com/jmcleod/edgefabric"
+
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+            -ldflags "-s -w \
+              -X ${MODULE}/pkg/version.Version=${VERSION} \
+              -X ${MODULE}/pkg/version.Commit=${COMMIT} \
+              -X ${MODULE}/pkg/version.BuildTime=${BUILD_TIME} \
+              -linkmode external -extldflags '-static'" \
+            -o edgefabric-linux-amd64 \
+            ./cmd/edgefabric
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f deploy/docker/Dockerfile \
+            -t edgefabric:${GITHUB_REF_NAME} \
+            -t edgefabric:latest \
+            .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            edgefabric-linux-amd64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
