@@ -160,9 +160,10 @@ func NewRouter(svc Services) http.Handler {
 		mux.Handle("/", SPAHandler(svc.StaticFS))
 	}
 
-	// Apply global middleware: recover → request ID → metrics → logging.
-	// Order: outermost (recover) catches panics from all inner layers.
+	// Apply global middleware: security headers → recover → request ID → metrics → logging.
+	// Order: outermost (security headers) runs first on every request.
 	handler := middleware.Chain(mux,
+		middleware.SecurityHeaders(),
 		middleware.Recover(svc.Logger),
 		middleware.RequestID(),
 		middleware.Metrics(svc.Metrics),

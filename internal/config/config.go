@@ -2,7 +2,9 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
+	"net"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -214,6 +216,16 @@ func (c *Config) validateController() error {
 	if c.Controller.Storage.DSN == "" {
 		return fmt.Errorf("controller.storage.dsn is required")
 	}
+	// Validate encryption key format: must be valid base64 decoding to 32 bytes (AES-256).
+	if c.Controller.Secrets.EncryptionKey != "" {
+		decoded, err := base64.StdEncoding.DecodeString(c.Controller.Secrets.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("controller.secrets.encryption_key: invalid base64: %w", err)
+		}
+		if len(decoded) != 32 {
+			return fmt.Errorf("controller.secrets.encryption_key: must decode to 32 bytes (AES-256), got %d", len(decoded))
+		}
+	}
 	return nil
 }
 
@@ -223,6 +235,19 @@ func (c *Config) validateNode() error {
 	}
 	if c.Node.DataDir == "" {
 		c.Node.DataDir = "/var/lib/edgefabric"
+	}
+	// Validate service mode settings.
+	if err := validateMode("node.bgp.mode", c.Node.BGP.Mode, []string{"gobgp", "noop"}); err != nil {
+		return err
+	}
+	if err := validateMode("node.dns.mode", c.Node.DNS.Mode, []string{"miekg", "noop"}); err != nil {
+		return err
+	}
+	if err := validateMode("node.cdn.mode", c.Node.CDN.Mode, []string{"proxy", "noop"}); err != nil {
+		return err
+	}
+	if err := validateMode("node.route.mode", c.Node.Route.Mode, []string{"forwarder", "noop"}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -234,7 +259,29 @@ func (c *Config) validateGateway() error {
 	if c.Gateway.DataDir == "" {
 		c.Gateway.DataDir = "/var/lib/edgefabric"
 	}
+	// Validate WireGuard IP if set.
+	if c.Gateway.WireGuardIP != "" {
+		if net.ParseIP(c.Gateway.WireGuardIP) == nil {
+			return fmt.Errorf("gateway.wireguard_ip: invalid IP address: %q", c.Gateway.WireGuardIP)
+		}
+	}
+	if err := validateMode("gateway.route_mode", c.Gateway.RouteMode, []string{"forwarder", "noop"}); err != nil {
+		return err
+	}
 	return nil
+}
+
+// validateMode checks that a mode string is one of the allowed values, or empty.
+func validateMode(field, value string, allowed []string) error {
+	if value == "" {
+		return nil
+	}
+	for _, a := range allowed {
+		if value == a {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s: unknown mode %q (allowed: %v)", field, value, allowed)
 }
 
 // DefaultLogLevel returns the log level, defaulting to "info".
