@@ -18,6 +18,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/events"
 	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/observability"
@@ -151,6 +152,11 @@ func RunController(cfg *config.Config) error {
 		return fmt.Errorf("bootstrap controller wireguard peer: %w", err)
 	}
 	logger.Info("controller wireguard peer bootstrapped")
+
+	// Initialize event bus for system event broadcasting.
+	// FUTURE: Wire event publishing into fleet heartbeat monitor, provisioning service, etc.
+	eventBus := events.NewBus(logger)
+	_ = eventBus // Bus is available for future wiring; not yet connected to services.
 
 	// Start system gauge updater (refreshes active node/gateway/tenant counts every 15s).
 	gaugeCtx, gaugeCancel := context.WithCancel(context.Background())
