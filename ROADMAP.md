@@ -26,25 +26,26 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] Health endpoint
 - [x] Basic metrics (Prometheus)
 - [x] Taskfile builds static binary
-- [ ] SQLite CRUD implementations (M1-scoped: tenant, user, API key, audit)
+- [x] SQLite CRUD implementations (M1-scoped: tenant, user, API key, audit)
 
 ---
 
 ### Milestone 1: Controller Core
 **Goal**: Controller starts, serves API, manages tenants and users.
 
-- [ ] REST API router with versioned prefix (/api/v1/)
-- [ ] OpenAPI spec generation
-- [ ] Authentication middleware (password + API key)
-- [ ] RBAC middleware
-- [ ] Tenant CRUD API
-- [ ] User CRUD API (with password hashing)
-- [ ] API Key management
-- [ ] TOTP 2FA enrollment and verification
-- [ ] Audit logging for all mutations
-- [ ] Encrypted secrets storage (AES-256-GCM)
-- [ ] SPA static file embedding and serving
-- [ ] Seed SuperUser on first run
+- [x] REST API router with versioned prefix (/api/v1/)
+- [x] OpenAPI spec (hand-authored, served at /api/v1/openapi.yaml)
+- [x] Authentication middleware (password + API key)
+- [x] RBAC middleware
+- [x] Tenant CRUD API
+- [x] User CRUD API (with password hashing)
+- [x] API Key management
+- [x] TOTP 2FA enrollment and verification
+- [x] Audit logging for all mutations
+- [x] Encrypted secrets storage (AES-256-GCM)
+- [x] SPA static file embedding and serving
+- [x] Seed SuperUser on first run
+- [x] Unit tests (storage, auth, tokens, tenant, user services)
 
 ---
 
@@ -177,7 +178,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 
 ## Current Status
 
-**Active Milestone**: 0 → 1 (Foundation wrapping up, Controller Core starting)
+**Active Milestone**: 2 (Fleet Management) — Milestones 0 and 1 are complete.
 
 ## Priority Order
 
