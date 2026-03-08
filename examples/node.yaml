@@ -1,0 +1,97 @@
+# EdgeFabric Node — Production Configuration Example
+#
+# Nodes are the edge compute workhorses. After enrollment, they establish
+# a WireGuard tunnel to the controller and run one or more service modes:
+# DNS, CDN, BGP, and/or route forwarding.
+#
+# Copy and adjust for each node:
+#   cp examples/node.yaml /etc/edgefabric/edgefabric.yaml
+
+# Role must be "node" for edge node processes.
+role: node
+
+# Log level: debug, info, warn, error.
+log_level: info
+
+node:
+  # -------------------------------------------------------------------
+  # Controller Connection
+  # -------------------------------------------------------------------
+
+  # Controller API address over the WireGuard overlay.
+  # This is the controller's overlay IP (wireguard.address) + API port.
+  controller_addr: "10.100.0.1:8443"
+
+  # One-time enrollment token issued by the controller during provisioning.
+  # After first enrollment this value is consumed and can be removed.
+  # enrollment_token: "ef-enroll-xxxxxxxxxxxx"
+
+  # -------------------------------------------------------------------
+  # Storage
+  # -------------------------------------------------------------------
+
+  # Local data directory for WireGuard keys, cached configs, and runtime state.
+  # Default: /var/lib/edgefabric
+  data_dir: /var/lib/edgefabric
+
+  # -------------------------------------------------------------------
+  # Health / Metrics
+  # -------------------------------------------------------------------
+
+  # Address for the health and Prometheus metrics server.
+  # Default: ":9090"
+  # Endpoints: /healthz, /readyz, /livez, /metrics
+  health_addr: ":9090"
+
+  # -------------------------------------------------------------------
+  # Service Modes
+  # -------------------------------------------------------------------
+  #
+  # Enable the services this node should run. Each service polls the
+  # controller for its configuration and reconciles the desired state
+  # locally. Set mode to "noop" (default) to disable real operations
+  # while still syncing config.
+
+  # BGP — advertise IP prefixes to upstream routers.
+  bgp:
+    enabled: false
+    # mode: "gobgp" for real BGP peering, "noop" for config-only.
+    mode: "noop"
+    # Router ID for BGP sessions. Defaults to the node's WireGuard overlay IP.
+    # router_id: "10.100.0.10"
+    # Local ASN for BGP peering. Set by controller-side BGP session config.
+    # local_asn: 65001
+
+  # DNS — authoritative DNS server for EdgeFabric-managed zones.
+  dns:
+    enabled: false
+    # mode: "miekg" for real DNS serving, "noop" for config-only.
+    mode: "noop"
+    # Address to listen on for DNS queries (UDP + TCP).
+    # Default: ":5353"
+    listen_addr: ":5353"
+
+  # CDN — reverse proxy / cache for CDN sites.
+  cdn:
+    enabled: false
+    # mode: "proxy" for real HTTP reverse proxy, "noop" for config-only.
+    mode: "noop"
+    # Address to listen on for HTTP traffic.
+    # Default: ":8080"
+    listen_addr: ":8080"
+
+  # Route — TCP/UDP port forwarding through gateways.
+  route:
+    enabled: false
+    # mode: "forwarder" for real forwarding, "noop" for config-only.
+    mode: "noop"
+
+# -------------------------------------------------------------------
+# Environment Variable Overrides
+# -------------------------------------------------------------------
+#
+#   EF_ROLE                    → role
+#   EF_LOG_LEVEL               → log_level
+#   EF_NODE_CONTROLLER_ADDR    → node.controller_addr
+#   EF_NODE_ENROLLMENT_TOKEN   → node.enrollment_token
+#   EF_NODE_DATA_DIR           → node.data_dir

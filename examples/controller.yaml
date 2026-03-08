@@ -1,0 +1,115 @@
+# EdgeFabric Controller — Production Configuration Example
+#
+# The controller is the central management plane. It hosts the API, manages
+# the WireGuard mesh, stores all state in SQLite (or Postgres), and serves
+# the web dashboard.
+#
+# Copy this file and adjust values for your environment:
+#   cp examples/controller.yaml /etc/edgefabric/edgefabric.yaml
+
+# Role must be "controller" for the control-plane process.
+role: controller
+
+# Log level: debug, info, warn, error.
+# Use "debug" for development; "info" for production.
+log_level: info
+
+controller:
+  # -------------------------------------------------------------------
+  # API Server
+  # -------------------------------------------------------------------
+
+  # Address the HTTP/API server listens on.
+  # Default: ":8443"
+  listen_addr: ":8443"
+
+  # The externally reachable URL for this controller. Used in enrollment
+  # tokens and self-referencing links. Set this to the URL users and
+  # agents will use to reach the controller.
+  external_url: "https://edgefabric.example.com:8443"
+
+  # -------------------------------------------------------------------
+  # Storage
+  # -------------------------------------------------------------------
+
+  storage:
+    # Driver: "sqlite" (default, zero-dependency) or "postgres".
+    driver: sqlite
+
+    # DSN varies by driver:
+    #   sqlite:   file path, e.g. "/var/lib/edgefabric/edgefabric.db"
+    #   postgres: connection string, e.g. "postgres://user:pass@host:5432/edgefabric?sslmode=require"
+    dsn: "/var/lib/edgefabric/edgefabric.db"
+
+  # -------------------------------------------------------------------
+  # TLS
+  # -------------------------------------------------------------------
+
+  tls:
+    # Enable TLS for the API server. Strongly recommended in production.
+    enabled: true
+
+    # Path to PEM-encoded certificate and private key files.
+    cert_file: "/etc/edgefabric/tls/cert.pem"
+    key_file: "/etc/edgefabric/tls/key.pem"
+
+    # Alternatively, enable automatic TLS via ACME (Let's Encrypt).
+    # Requires port 443 to be reachable and external_url to be a valid FQDN.
+    # auto_cert: true
+
+  # -------------------------------------------------------------------
+  # WireGuard Hub
+  # -------------------------------------------------------------------
+
+  # The controller acts as the WireGuard hub. All nodes and gateways
+  # establish WireGuard tunnels to this endpoint. The overlay network
+  # carries agent ↔ controller API traffic and inter-node communication.
+  wireguard:
+    # UDP port for WireGuard. Must be reachable from all nodes/gateways.
+    listen_port: 51820
+
+    # Overlay subnet allocated to the entire mesh. All peers get IPs
+    # from this range. Use a /16 for up to ~65k peers.
+    subnet: "10.100.0.0/16"
+
+    # The controller's own overlay IP within the subnet.
+    address: "10.100.0.1/16"
+
+  # -------------------------------------------------------------------
+  # Secrets
+  # -------------------------------------------------------------------
+
+  secrets:
+    # AES-256 encryption key for secrets at rest (WireGuard private keys,
+    # enrollment tokens, etc.). Must be base64-encoded, decoding to exactly
+    # 32 bytes.
+    #
+    # Generate with:
+    #   openssl rand -base64 32
+    #
+    # ⚠️  Store this key securely. Loss means encrypted data is unrecoverable.
+    encryption_key: ""
+
+    # Separate HMAC key for JWT token signing. Falls back to encryption_key
+    # if not set. For production, use a dedicated signing key so you can
+    # rotate them independently.
+    #
+    # Generate with:
+    #   openssl rand -base64 32
+    token_signing_key: ""
+
+# -------------------------------------------------------------------
+# Environment Variable Overrides
+# -------------------------------------------------------------------
+#
+# All settings above can be overridden via EF_-prefixed environment
+# variables for twelve-factor / container deployments:
+#
+#   EF_ROLE                                → role
+#   EF_LOG_LEVEL                           → log_level
+#   EF_CONTROLLER_LISTEN_ADDR              → controller.listen_addr
+#   EF_CONTROLLER_EXTERNAL_URL             → controller.external_url
+#   EF_CONTROLLER_STORAGE_DRIVER           → controller.storage.driver
+#   EF_CONTROLLER_STORAGE_DSN              → controller.storage.dsn
+#   EF_CONTROLLER_SECRETS_ENCRYPTION_KEY   → controller.secrets.encryption_key
+#   EF_CONTROLLER_SECRETS_TOKEN_SIGNING_KEY → controller.secrets.token_signing_key

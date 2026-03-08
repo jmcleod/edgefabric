@@ -1,0 +1,66 @@
+# EdgeFabric Gateway — Production Configuration Example
+#
+# Gateways are entry points for inbound traffic. They listen on public
+# IPs and forward traffic to backend services through the WireGuard
+# overlay, based on routes configured via the controller API.
+#
+# Copy and adjust for each gateway:
+#   cp examples/gateway.yaml /etc/edgefabric/edgefabric.yaml
+
+# Role must be "gateway" for gateway processes.
+role: gateway
+
+# Log level: debug, info, warn, error.
+log_level: info
+
+gateway:
+  # -------------------------------------------------------------------
+  # Controller Connection
+  # -------------------------------------------------------------------
+
+  # Controller API address over the WireGuard overlay.
+  controller_addr: "10.100.0.1:8443"
+
+  # One-time enrollment token issued by the controller during provisioning.
+  # After first enrollment this value is consumed and can be removed.
+  # enrollment_token: "ef-enroll-xxxxxxxxxxxx"
+
+  # -------------------------------------------------------------------
+  # Storage
+  # -------------------------------------------------------------------
+
+  # Local data directory for WireGuard keys, cached configs, and runtime state.
+  # Default: /var/lib/edgefabric
+  data_dir: /var/lib/edgefabric
+
+  # -------------------------------------------------------------------
+  # Health / Metrics
+  # -------------------------------------------------------------------
+
+  # Address for the health and Prometheus metrics server.
+  # Default: ":9090"
+  # Endpoints: /healthz, /readyz, /livez, /metrics
+  health_addr: ":9090"
+
+  # -------------------------------------------------------------------
+  # Route Forwarding
+  # -------------------------------------------------------------------
+
+  # The gateway's WireGuard overlay IP. Used as the listen address for
+  # route forwarding listeners within the mesh.
+  # wireguard_ip: "10.100.0.50"
+
+  # Route forwarding mode:
+  #   "forwarder" — real TCP/UDP forwarding based on route config
+  #   "noop"      — sync config from controller but don't forward (default)
+  route_mode: "noop"
+
+# -------------------------------------------------------------------
+# Environment Variable Overrides
+# -------------------------------------------------------------------
+#
+#   EF_ROLE                       → role
+#   EF_LOG_LEVEL                  → log_level
+#   EF_GATEWAY_CONTROLLER_ADDR    → gateway.controller_addr
+#   EF_GATEWAY_ENROLLMENT_TOKEN   → gateway.enrollment_token
+#   EF_GATEWAY_DATA_DIR           → gateway.data_dir
