@@ -10,7 +10,39 @@ permissions:
   contents: read
 
 jobs:
+  spa:
+    name: SPA Build & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/console/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web/console
+        run: npm ci
+
+      - name: TypeScript typecheck
+        working-directory: web/console
+        run: npx tsc --noEmit
+
+      - name: Build SPA
+        working-directory: web/console
+        run: npm run build
+
+      - name: Upload SPA build
+        uses: actions/upload-artifact@v4
+        with:
+          name: spa-build
+          path: web/static/
+
   build:
+    needs: spa
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +51,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Download SPA build
+        uses: actions/download-artifact@v4
+        with:
+          name: spa-build
+          path: web/static/
 
       - name: Download dependencies
         run: go mod download

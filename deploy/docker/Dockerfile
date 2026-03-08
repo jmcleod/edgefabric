@@ -1,4 +1,12 @@
-# Build stage
+# SPA build stage
+FROM node:20-alpine AS spa-build
+WORKDIR /spa
+COPY web/console/package*.json ./
+RUN npm ci
+COPY web/console/ ./
+RUN npm run build
+
+# Go build stage
 FROM golang:1.24-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev
@@ -8,6 +16,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+COPY --from=spa-build /spa/../static ./web/static/
 RUN CGO_ENABLED=1 GOOS=linux go build \
     -ldflags "-s -w" \
     -o /bin/edgefabric \

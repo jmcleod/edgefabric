@@ -7,6 +7,7 @@ Everything you need to go from clone to running tests in under 10 minutes.
 | Tool | Version | Notes |
 |------|---------|-------|
 | Go | 1.22+ | CGO required (SQLite uses C bindings) |
+| Node.js | 20+ | Required for SPA build (`web/console/`) |
 | Task | 3.x | Task runner (`go install github.com/go-task/task/v3/cmd/task@latest`) |
 | golangci-lint | 1.55+ | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` |
 | SQLite | 3.x | Typically pre-installed on macOS/Linux |
@@ -14,12 +15,13 @@ Everything you need to go from clone to running tests in under 10 minutes.
 
 On macOS:
 ```bash
-brew install go task golangci-lint
+brew install go node task golangci-lint
 ```
 
 On Ubuntu/Debian:
 ```bash
 # Go: follow https://go.dev/doc/install
+# Node.js: follow https://nodejs.org/ or use nvm
 # Task:
 go install github.com/go-task/task/v3/cmd/task@latest
 # golangci-lint:
@@ -151,7 +153,8 @@ edgefabric/
 ├── pkg/
 │   └── version/           # Build-time version info (injected via ldflags)
 ├── web/
-│   └── static/            # Embedded SPA files (//go:embed)
+│   ├── console/           # SPA source (React + TypeScript + Vite)
+│   └── static/            # SPA build output (//go:embed)
 ├── openapi/
 │   └── v1.yaml            # OpenAPI 3.0.3 specification
 ├── deploy/
@@ -317,37 +320,83 @@ Add the resource constant in `internal/rbac/rbac.go`.
 
 Add the endpoint to `openapi/v1.yaml`.
 
-## SPA Embedding
+## Frontend Development
 
-The web dashboard is served as an embedded SPA:
+The web dashboard is a React 18 SPA built with TypeScript, Vite, Tailwind CSS, and shadcn-ui. Source lives in `web/console/`, and it builds to `web/static/` which is embedded into the Go binary via `//go:embed`.
 
 ```
 web/
-└── static/
-    └── index.html    # Placeholder SPA
+├── console/          # SPA source (React + TypeScript + Vite)
+│   ├── src/
+│   │   ├── components/   # UI components (shadcn-ui based)
+│   │   ├── hooks/        # React Query data-fetching hooks
+│   │   ├── lib/          # API client, transforms
+│   │   ├── pages/        # Page components (one per route)
+│   │   └── types/        # TypeScript types (SPA view-model + API types)
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── tailwind.config.ts
+├── static/           # Build output (embedded by Go)
+└── embed.go          # //go:embed static
 ```
 
-Files in `web/static/` are embedded at build time via `//go:embed` in `web/embed.go`. The `SPAHandler` in `internal/api/spa.go` serves these files and falls back to `index.html` for client-side routing.
+### Quick Start
 
-To update the SPA:
-1. Edit files in `web/static/`
-2. Rebuild: `task build`
-3. The new files are embedded in the binary
+```bash
+# Install SPA dependencies
+task install-spa
+
+# Run Vite dev server with hot-reload (proxies /api to Go backend on :8443)
+task dev-spa
+
+# In another terminal, run the Go backend
+task dev
+```
+
+The Vite dev server runs on `http://localhost:8080` and proxies API requests to the Go backend at `http://localhost:8443`. Changes to the SPA source are reflected instantly.
+
+### Build
+
+```bash
+# Build SPA only (outputs to web/static/)
+task build-spa
+
+# Build everything (SPA + Go binary)
+task build
+
+# TypeScript typecheck
+task check-spa
+```
+
+### SPA Architecture
+
+**Data fetching** uses [TanStack React Query](https://tanstack.com/query) with one hook per API resource. Hooks live in `web/console/src/hooks/` and handle fetching, caching (30s stale time), and type transformation.
+
+**Transform layer** in `web/console/src/lib/transforms.ts` converts backend API types (snake_case JSON) to SPA view-model types (camelCase). Status enums are mapped (e.g., backend `online` becomes SPA `healthy`). Fields not available from the backend (CPU, memory, bandwidth) display "\u2014".
+
+**API client** in `web/console/src/lib/api.ts` wraps `fetch()` with JWT auth headers, response envelope unwrapping, and automatic redirect to `/login` on 401.
+
+**Auth flow**: Login page posts to `/api/v1/auth/login`, stores the JWT token, then fetches user profile from `/api/v1/auth/me`. The `AuthProvider` context manages user state and the `RequireAuth` wrapper protects routes.
 
 ## Task Commands
 
 | Command | Description |
 |---------|-------------|
-| `task build` | Build the binary |
+| `task build` | Build Go binary (includes SPA build) |
+| `task build-go` | Build Go binary only (skip SPA) |
+| `task build-spa` | Build SPA to web/static/ |
 | `task build-static` | Build a static Linux binary |
-| `task test` | Run all tests with race detector |
+| `task install-spa` | Install SPA npm dependencies |
+| `task check-spa` | Run TypeScript type checks on SPA |
+| `task dev-spa` | Run Vite dev server with hot-reload |
+| `task test` | Run all Go tests with race detector |
 | `task test-coverage` | Run tests with coverage report |
 | `task lint` | Run golangci-lint |
 | `task fmt` | Format code with gofumpt |
 | `task vet` | Run go vet |
 | `task tidy` | Tidy go modules |
 | `task dev` | Build and run controller in dev mode |
-| `task check` | Run lint + vet + test |
+| `task check` | Run all checks (SPA typecheck + lint + vet + test) |
 | `task clean` | Remove build artifacts |
 
 ## Further Reading

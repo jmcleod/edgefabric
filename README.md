@@ -19,7 +19,8 @@ A distributed edge networking platform that orchestrates a global fleet of nodes
 - **Authentication** — JWT tokens, TOTP two-factor, API keys for programmatic access
 - **Audit Logging** — Every state-changing operation is recorded
 - **Observability** — Structured logging, Prometheus metrics, health/readiness/liveness endpoints
-- **Single Binary** — One Go binary runs as controller, node, or gateway
+- **Web Console** — Embedded React SPA with real-time dashboard, fleet management, DNS/CDN configuration
+- **Single Binary** — One Go binary runs as controller, node, or gateway (SPA included)
 
 ## Architecture
 
@@ -70,7 +71,7 @@ docker compose down -v
 ### Build from Source
 
 ```bash
-# Prerequisites: Go 1.22+, Task (https://taskfile.dev)
+# Prerequisites: Go 1.22+, Node.js 20+, Task (https://taskfile.dev)
 go install github.com/go-task/task/v3/cmd/task@latest
 
 # Build
@@ -156,7 +157,8 @@ internal/
   bgp/, dnsserver/, cdnserver/, routeserver/, gatewayrt/
                           Node/gateway-side service runtimes
 pkg/version/              Build-time version info
-web/static/               Embedded SPA (served at /)
+web/console/              SPA source (React + TypeScript + Vite)
+web/static/               SPA build output (embedded at /)
 deploy/docker/            Dockerfile (multi-stage alpine build)
 deploy/systemd/           Hardened systemd units
 demo/                     Docker Compose demo environment
@@ -168,10 +170,11 @@ openapi/                  OpenAPI 3.0.3 specification
 ## Development
 
 ```bash
-task check    # lint + vet + test (full CI equivalent)
+task check    # lint + vet + test + SPA typecheck (full CI equivalent)
 task test     # tests with race detector
 task lint     # golangci-lint
 task dev      # build and run controller with config.dev.yaml
+task dev-spa  # run Vite dev server with hot-reload (proxies to Go backend)
 ```
 
 See the [Developer Guide](docs/developer-guide.md) for the full setup walkthrough.

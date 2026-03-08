@@ -22,8 +22,60 @@ tasks:
     cmds:
       - task: build
 
+  install-spa:
+    desc: Install SPA dependencies
+    dir: web/console
+    cmds:
+      - npm ci
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules/.package-lock.json
+
+  build-spa:
+    desc: Build the SPA into web/static/
+    dir: web/console
+    deps: [install-spa]
+    cmds:
+      - npm run build
+    sources:
+      - src/**/*
+      - index.html
+      - vite.config.ts
+      - tailwind.config.ts
+      - tsconfig*.json
+    generates:
+      - ../static/index.html
+
+  check-spa:
+    desc: Run TypeScript type checks on the SPA
+    dir: web/console
+    deps: [install-spa]
+    cmds:
+      - npx tsc --noEmit
+
+  dev-spa:
+    desc: Run Vite dev server with hot-reload (proxies /api to Go backend)
+    dir: web/console
+    deps: [install-spa]
+    cmds:
+      - npx vite
+
   build:
-    desc: Build the edgefabric binary
+    desc: Build the edgefabric binary (includes SPA build)
+    deps: [build-spa]
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/edgefabric
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  build-go:
+    desc: Build just the Go binary (skip SPA build)
     cmds:
       - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/edgefabric
     sources:
@@ -35,6 +87,7 @@ tasks:
 
   build-static:
     desc: Build a fully static binary (Linux)
+    deps: [build-spa]
     cmds:
       - CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "{{.LDFLAGS}} -linkmode external -extldflags '-static'" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/edgefabric
 
@@ -82,12 +135,13 @@ tasks:
   dev:
     desc: Build and run the controller in development mode
     cmds:
-      - task: build
+      - task: build-go
       - ./{{.BUILD_DIR}}/{{.BINARY_NAME}} controller --config config.dev.yaml
 
   check:
-    desc: Run all checks (lint, vet, test)
+    desc: Run all checks (lint, vet, test, SPA typecheck)
     cmds:
+      - task: check-spa
       - task: lint
       - task: vet
       - task: test
