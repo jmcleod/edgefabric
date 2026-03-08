@@ -146,15 +146,15 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 ### Milestone 8: Route/Gateway
 **Goal**: Traffic routing from anycast entry through nodes to gateways into private networks.
 
-- [ ] Route CRUD API on controller
-- [ ] Route config sync to nodes and gateways
-- [ ] TCP/UDP proxy listener on nodes
-- [ ] ICMP forwarding
-- [ ] Packet forwarding over WireGuard to gateway
-- [ ] Gateway forwarding to private destinations
-- [ ] RFC1918 routing
-- [ ] Connection tracking / NAT for return traffic
-- [ ] Route health monitoring
+- [x] Route CRUD API on controller
+- [x] Route config sync to nodes and gateways
+- [x] TCP/UDP proxy listener on nodes (userspace forwarding)
+- [ ] ICMP forwarding — deferred to v2 (requires raw sockets / elevated privileges)
+- [x] Packet forwarding over WireGuard to gateway
+- [x] Gateway forwarding to private destinations
+- [x] RFC1918 routing (gateway binds to WireGuard overlay IP, forwards to private destinations)
+- [x] Connection tracking / NAT for return traffic (TCP bidirectional relay, UDP session map with idle timeout)
+- [ ] Route health monitoring — basic status tracking in v1, alerting deferred to v2
 
 ---
 
@@ -187,7 +187,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 
 ## Current Status
 
-**Active Milestone**: 8 (Route/Gateway) — Milestones 0–7 are substantially complete (see items above for remaining work).
+**Active Milestone**: 9 (Observability & Audit) — Milestones 0–8 are substantially complete (see items above for remaining work).
 
 ## Priority Order
 

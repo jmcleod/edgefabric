@@ -9,8 +9,9 @@ info:
     enrollment, gateway management, SSH key rotation, networking
     (BGP sessions, IP allocations, WireGuard peers), DNS zone and record
     management, CDN site and origin management with caching reverse proxy,
-    and node config sync (WireGuard, BGP, DNS, CDN).
-  version: "1.5.0"
+    route management with TCP/UDP forwarding through gateways,
+    and node/gateway config sync (WireGuard, BGP, DNS, CDN, Routes).
+  version: "1.6.0"
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -63,6 +64,8 @@ tags:
     description: CDN site management (caching reverse proxy configuration, domain routing, cache purge)
   - name: CDN Origins
     description: CDN origin server management (backend servers for reverse proxying)
+  - name: Routes
+    description: Route management for TCP/UDP traffic forwarding through gateways
 
 paths:
   /api/v1/auth/login:
@@ -1877,6 +1880,201 @@ paths:
         "501":
           description: CDN service not available
 
+  # --- Routes ---
+  /api/v1/tenants/{tenantId}/routes:
+    parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Routes]
+      summary: List routes for a tenant
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of routes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Routes]
+      summary: Create a route
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, protocol, entry_ip, gateway_id, destination_ip]
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                protocol:
+                  $ref: "#/components/schemas/RouteProtocol"
+                entry_ip:
+                  type: string
+                  format: ipv4
+                  description: Anycast IP on nodes where traffic enters
+                entry_port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                  description: Required for tcp/udp/all, forbidden for icmp
+                gateway_id:
+                  type: string
+                  format: uuid
+                  description: Gateway that forwards to the private destination
+                destination_ip:
+                  type: string
+                  format: ipv4
+                  description: Private destination IP behind the gateway
+                destination_port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                  description: Required for tcp/udp/all, forbidden for icmp
+                node_group_id:
+                  type: string
+                  format: uuid
+                  description: Node group that serves this route (optional)
+      responses:
+        "201":
+          description: Route created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Route"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/routes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Routes]
+      summary: Get a route by ID
+      responses:
+        "200":
+          description: Route details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Route"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Routes]
+      summary: Update a route
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                protocol:
+                  $ref: "#/components/schemas/RouteProtocol"
+                entry_ip:
+                  type: string
+                  format: ipv4
+                entry_port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                gateway_id:
+                  type: string
+                  format: uuid
+                destination_ip:
+                  type: string
+                  format: ipv4
+                destination_port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                node_group_id:
+                  type: string
+                  format: uuid
+                clear_node_group:
+                  type: boolean
+                  description: Set to true to remove node group assignment
+                status:
+                  $ref: "#/components/schemas/RouteStatus"
+      responses:
+        "200":
+          description: Route updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Route"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Routes]
+      summary: Delete a route
+      responses:
+        "204":
+          description: Route deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- Node Route Config ---
+  /api/v1/nodes/{id}/config/routes:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Node Networking]
+      summary: Get desired route config for a node
+      description: Returns the desired route forwarding configuration for node-side reconciliation. Each route includes the gateway's WireGuard IP for overlay forwarding.
+      responses:
+        "200":
+          description: Desired route configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_NodeRouteConfig"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          description: Route service not available
+
+  # --- Gateway Route Config ---
+  /api/v1/gateways/{id}/config/routes:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Gateways]
+      summary: Get desired route config for a gateway
+      description: Returns the active routes assigned to this gateway for gateway-side reconciliation.
+      responses:
+        "200":
+          description: Desired route configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_GatewayRouteConfig"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /healthz:
     get:
       tags: [Infrastructure]
@@ -2988,6 +3186,116 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CDNOrigin"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    # --- Route schemas ---
+    RouteProtocol:
+      type: string
+      enum: [tcp, udp, icmp, all]
+      description: Network protocol for the route
+
+    RouteStatus:
+      type: string
+      enum: [active, disabled]
+      description: Operational status of the route
+
+    Route:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        protocol:
+          $ref: "#/components/schemas/RouteProtocol"
+        entry_ip:
+          type: string
+          format: ipv4
+        entry_port:
+          type: integer
+          nullable: true
+        gateway_id:
+          type: string
+          format: uuid
+        destination_ip:
+          type: string
+          format: ipv4
+        destination_port:
+          type: integer
+          nullable: true
+        node_group_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: "#/components/schemas/RouteStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RouteWithGateway:
+      type: object
+      properties:
+        route:
+          $ref: "#/components/schemas/Route"
+        gateway_wg_ip:
+          type: string
+          format: ipv4
+          description: Gateway's WireGuard overlay IP for forwarding
+
+    NodeRouteConfig:
+      type: object
+      properties:
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteWithGateway"
+
+    GatewayRouteConfig:
+      type: object
+      properties:
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Route"
+
+    DataResponse_Route:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Route"
+
+    DataResponse_NodeRouteConfig:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/NodeRouteConfig"
+
+    DataResponse_GatewayRouteConfig:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/GatewayRouteConfig"
+
+    RouteListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Route"
         total:
           type: integer
         offset:
