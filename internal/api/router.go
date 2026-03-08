@@ -10,6 +10,7 @@ import (
 	v1 "github.com/jmcleod/edgefabric/internal/api/v1"
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
+	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/observability"
@@ -29,6 +30,7 @@ type Services struct {
 	UserSvc    user.Service
 	FleetSvc        fleet.Service
 	NetworkingSvc   networking.Service
+	DNSSvc          dns.Service
 	ProvisioningSvc provisioning.Service
 	Authorizer      rbac.Authorizer
 	AuditLog   audit.Logger
@@ -106,8 +108,17 @@ func NewRouter(svc Services) http.Handler {
 		nodeNetHandler := v1.NewNodeNetworkingHandler(svc.NetworkingSvc, svc.Authorizer)
 		nodeNetHandler.Register(mux, authMW)
 
-		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.Authorizer)
+		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.DNSSvc, svc.Authorizer)
 		nodeConfigHandler.Register(mux, authMW)
+	}
+
+	// DNS handlers (zones, records).
+	if svc.DNSSvc != nil {
+		dnsZoneHandler := v1.NewDNSZoneHandler(svc.DNSSvc, svc.Authorizer, svc.AuditLog)
+		dnsZoneHandler.Register(mux, authMW)
+
+		dnsRecordHandler := v1.NewDNSRecordHandler(svc.DNSSvc, svc.Authorizer, svc.AuditLog)
+		dnsRecordHandler.Register(mux, authMW)
 	}
 
 	// OpenAPI spec (unauthenticated).

@@ -15,6 +15,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
 	"github.com/jmcleod/edgefabric/internal/config"
+	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/networking"
@@ -109,6 +110,14 @@ func RunController(cfg *config.Config) error {
 		cfg.Controller.WireGuard,
 	)
 
+	// Initialize DNS service.
+	dnsSvc := dns.NewService(
+		store, // DNSZoneStore
+		store, // DNSRecordStore
+		store, // NodeGroupStore
+		store, // NodeStore
+	)
+
 	// Connect provisioning service to networking for WG config sync.
 	provisioningSvc.SetWireGuardConfigGenerator(networkingSvc)
 
@@ -132,6 +141,7 @@ func RunController(cfg *config.Config) error {
 		UserSvc:         userSvc,
 		FleetSvc:        fleetSvc,
 		NetworkingSvc:   networkingSvc,
+		DNSSvc:          dnsSvc,
 		ProvisioningSvc: provisioningSvc,
 		Authorizer:      authorizer,
 		AuditLog:        auditLog,
