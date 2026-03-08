@@ -74,7 +74,7 @@ func NewRouter(svc Services) http.Handler {
 		nodeGroupHandler := v1.NewNodeGroupHandler(svc.FleetSvc, svc.Authorizer, svc.AuditLog)
 		nodeGroupHandler.Register(mux, authMW)
 
-		statusHandler := v1.NewStatusHandler(svc.TenantSvc, svc.UserSvc, svc.FleetSvc, svc.Authorizer)
+		statusHandler := v1.NewStatusHandler(svc.TenantSvc, svc.UserSvc, svc.FleetSvc, svc.DNSSvc, svc.CDNSvc, svc.RouteSvc, svc.Authorizer)
 		statusHandler.Register(mux, authMW)
 	}
 
