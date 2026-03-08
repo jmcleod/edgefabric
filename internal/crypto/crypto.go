@@ -30,6 +30,7 @@ func GenerateRandomString(n int) (string, error) {
 
 // EncryptAESGCM encrypts plaintext with AES-256-GCM using the given key.
 // Key must be 32 bytes (AES-256). Returns base64-encoded ciphertext.
+// FUTURE: Support key rotation with versioned key IDs.
 func EncryptAESGCM(key, plaintext []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {

@@ -35,6 +35,7 @@ func NewService(users storage.UserStore, apiKeys storage.APIKeyStore, secretStor
 
 // AuthenticatePassword validates email/password and returns the user.
 // Security: uses bcrypt.CompareHashAndPassword for constant-time comparison.
+// FUTURE: Add rate limiting for AuthenticatePassword to mitigate brute-force attacks.
 func (s *DefaultService) AuthenticatePassword(ctx context.Context, email, password string) (*domain.User, error) {
 	user, err := s.users.GetUserByEmail(ctx, email)
 	if err != nil {

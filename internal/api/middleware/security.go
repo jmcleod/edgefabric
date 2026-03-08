@@ -5,6 +5,7 @@ import "net/http"
 // SecurityHeaders returns middleware that sets common HTTP security headers
 // on every response. These provide defense-in-depth against common web
 // attacks (clickjacking, MIME sniffing, XSS reflection).
+// FUTURE: Add configurable CORS and HSTS when TLS is enforced.
 func SecurityHeaders() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
