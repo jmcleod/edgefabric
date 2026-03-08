@@ -12,6 +12,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/auth"
 	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/observability"
+	"github.com/jmcleod/edgefabric/internal/provisioning"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/storage"
 	"github.com/jmcleod/edgefabric/internal/tenant"
@@ -25,8 +26,9 @@ type Services struct {
 	TokenSvc   *auth.TokenService
 	TenantSvc  tenant.Service
 	UserSvc    user.Service
-	FleetSvc   fleet.Service
-	Authorizer rbac.Authorizer
+	FleetSvc        fleet.Service
+	ProvisioningSvc provisioning.Service
+	Authorizer      rbac.Authorizer
 	AuditLog   audit.Logger
 	APIKeys    storage.APIKeyStore
 	SSHKeys    storage.SSHKeyStore
@@ -71,6 +73,21 @@ func NewRouter(svc Services) http.Handler {
 	if svc.SSHKeys != nil {
 		sshKeyHandler := v1.NewSSHKeyHandler(svc.SSHKeys, svc.Authorizer, svc.AuditLog)
 		sshKeyHandler.Register(mux, authMW)
+	}
+
+	// Provisioning and enrollment handlers.
+	if svc.ProvisioningSvc != nil {
+		provisioningHandler := v1.NewProvisioningHandler(svc.ProvisioningSvc, svc.Authorizer, svc.AuditLog)
+		provisioningHandler.Register(mux, authMW)
+
+		enrollmentHandler := v1.NewEnrollmentHandler(svc.ProvisioningSvc)
+		enrollmentHandler.Register(mux) // No auth — token-based.
+	}
+
+	// Gateway handler.
+	if svc.FleetSvc != nil {
+		gatewayHandler := v1.NewGatewayHandler(svc.FleetSvc, svc.Authorizer, svc.AuditLog)
+		gatewayHandler.Register(mux, authMW)
 	}
 
 	// OpenAPI spec (unauthenticated).

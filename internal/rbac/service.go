@@ -38,8 +38,10 @@ const (
 	ResourceRoute        Resource = "route"
 	ResourceSSHKey       Resource = "ssh_key"
 	ResourceTLSCert      Resource = "tls_certificate"
-	ResourceAuditEvent   Resource = "audit_event"
-	ResourceAPIKey       Resource = "api_key"
+	ResourceAuditEvent       Resource = "audit_event"
+	ResourceAPIKey           Resource = "api_key"
+	ResourceProvisioningJob  Resource = "provisioning_job"
+	ResourceEnrollmentToken  Resource = "enrollment_token"
 )
 
 // Authorizer checks whether a set of claims permits an action on a resource.

@@ -17,8 +17,10 @@ import (
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/observability"
+	"github.com/jmcleod/edgefabric/internal/provisioning"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/secrets"
+	"github.com/jmcleod/edgefabric/internal/ssh"
 	"github.com/jmcleod/edgefabric/internal/storage/sqlite"
 	"github.com/jmcleod/edgefabric/internal/tenant"
 	"github.com/jmcleod/edgefabric/internal/user"
@@ -81,21 +83,36 @@ func RunController(cfg *config.Config) error {
 		return fmt.Errorf("seed superuser: %w", err)
 	}
 
+	// Initialize provisioning service.
+	sshClient := ssh.NewClient()
+	provisioningSvc := provisioning.NewProvisioner(
+		store,     // NodeStore
+		store,     // ProvisioningJobStore
+		store,     // EnrollmentTokenStore
+		store,     // WireGuardPeerStore
+		store,     // SSHKeyStore
+		sshClient, // SSH client
+		secretStore,
+		cfg.Controller.WireGuard,
+		cfg.Controller.ExternalURL,
+	)
+
 	// Assemble API router.
 	handler := api.NewRouter(api.Services{
-		AuthSvc:    authSvc,
-		TokenSvc:   tokenSvc,
-		TenantSvc:  tenantSvc,
-		UserSvc:    userSvc,
-		FleetSvc:   fleetSvc,
-		Authorizer: authorizer,
-		AuditLog:   auditLog,
-		APIKeys:    store,
-		SSHKeys:    store,
-		Health:     health,
-		Metrics:    metrics,
-		Logger:     logger,
-		StaticFS:   web.StaticFiles,
+		AuthSvc:         authSvc,
+		TokenSvc:        tokenSvc,
+		TenantSvc:       tenantSvc,
+		UserSvc:         userSvc,
+		FleetSvc:        fleetSvc,
+		ProvisioningSvc: provisioningSvc,
+		Authorizer:      authorizer,
+		AuditLog:        auditLog,
+		APIKeys:         store,
+		SSHKeys:         store,
+		Health:          health,
+		Metrics:         metrics,
+		Logger:          logger,
+		StaticFS:        web.StaticFiles,
 	})
 
 	srv := &http.Server{
