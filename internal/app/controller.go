@@ -14,6 +14,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/api"
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
+	"github.com/jmcleod/edgefabric/internal/cdn"
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/domain"
@@ -118,6 +119,14 @@ func RunController(cfg *config.Config) error {
 		store, // NodeStore
 	)
 
+	// Initialize CDN service.
+	cdnSvc := cdn.NewService(
+		store, // CDNSiteStore
+		store, // CDNOriginStore
+		store, // NodeGroupStore
+		store, // NodeStore
+	)
+
 	// Connect provisioning service to networking for WG config sync.
 	provisioningSvc.SetWireGuardConfigGenerator(networkingSvc)
 
@@ -142,6 +151,7 @@ func RunController(cfg *config.Config) error {
 		FleetSvc:        fleetSvc,
 		NetworkingSvc:   networkingSvc,
 		DNSSvc:          dnsSvc,
+		CDNSvc:          cdnSvc,
 		ProvisioningSvc: provisioningSvc,
 		Authorizer:      authorizer,
 		AuditLog:        auditLog,

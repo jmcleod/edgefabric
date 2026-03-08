@@ -10,6 +10,7 @@ import (
 	v1 "github.com/jmcleod/edgefabric/internal/api/v1"
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
+	"github.com/jmcleod/edgefabric/internal/cdn"
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/networking"
@@ -31,6 +32,7 @@ type Services struct {
 	FleetSvc        fleet.Service
 	NetworkingSvc   networking.Service
 	DNSSvc          dns.Service
+	CDNSvc          cdn.Service
 	ProvisioningSvc provisioning.Service
 	Authorizer      rbac.Authorizer
 	AuditLog   audit.Logger
@@ -108,7 +110,7 @@ func NewRouter(svc Services) http.Handler {
 		nodeNetHandler := v1.NewNodeNetworkingHandler(svc.NetworkingSvc, svc.Authorizer)
 		nodeNetHandler.Register(mux, authMW)
 
-		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.DNSSvc, svc.Authorizer)
+		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.DNSSvc, svc.CDNSvc, svc.Authorizer)
 		nodeConfigHandler.Register(mux, authMW)
 	}
 
@@ -119,6 +121,15 @@ func NewRouter(svc Services) http.Handler {
 
 		dnsRecordHandler := v1.NewDNSRecordHandler(svc.DNSSvc, svc.Authorizer, svc.AuditLog)
 		dnsRecordHandler.Register(mux, authMW)
+	}
+
+	// CDN handlers (sites, origins).
+	if svc.CDNSvc != nil {
+		cdnSiteHandler := v1.NewCDNSiteHandler(svc.CDNSvc, svc.Authorizer, svc.AuditLog)
+		cdnSiteHandler.Register(mux, authMW)
+
+		cdnOriginHandler := v1.NewCDNOriginHandler(svc.CDNSvc, svc.Authorizer, svc.AuditLog)
+		cdnOriginHandler.Register(mux, authMW)
 	}
 
 	// OpenAPI spec (unauthenticated).
