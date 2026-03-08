@@ -20,6 +20,12 @@ func ClaimsFromContext(ctx context.Context) *auth.Claims {
 	return c
 }
 
+// ContextWithClaims returns a new context with the given claims attached.
+// This is primarily intended for testing; production code uses the Auth middleware.
+func ContextWithClaims(ctx context.Context, claims *auth.Claims) context.Context {
+	return context.WithValue(ctx, claimsKey{}, claims)
+}
+
 // Auth returns middleware that authenticates requests via Bearer token or API key.
 //
 // Authentication methods:
