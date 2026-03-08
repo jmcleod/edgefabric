@@ -11,8 +11,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jmcleod/edgefabric/internal/api"
+	"github.com/jmcleod/edgefabric/internal/audit"
+	"github.com/jmcleod/edgefabric/internal/auth"
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/observability"
+	"github.com/jmcleod/edgefabric/internal/rbac"
+	"github.com/jmcleod/edgefabric/internal/secrets"
+	"github.com/jmcleod/edgefabric/internal/storage/sqlite"
+	"github.com/jmcleod/edgefabric/internal/tenant"
+	"github.com/jmcleod/edgefabric/internal/user"
+	"github.com/jmcleod/edgefabric/web"
 )
 
 // RunController starts the controller process.
@@ -29,26 +38,65 @@ func RunController(cfg *config.Config) error {
 	metrics := observability.NewMetrics()
 	health := observability.NewHealthChecker()
 
-	// TODO: Initialize storage.
-	// TODO: Initialize services.
-	// TODO: Initialize API router.
+	// Initialize storage.
+	store, err := sqlite.New(cfg.Controller.Storage.DSN)
+	if err != nil {
+		return fmt.Errorf("init storage: %w", err)
+	}
+	defer store.Close()
 
-	// Build HTTP mux.
-	mux := http.NewServeMux()
-	mux.Handle("/healthz", health.Handler())
-	mux.Handle("/metrics", metrics.Handler())
-	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","message":"EdgeFabric Controller API v1"}`)
+	if err := store.Migrate(context.Background()); err != nil {
+		return fmt.Errorf("migrate storage: %w", err)
+	}
+
+	// Register storage health check.
+	health.Register(observability.HealthCheck{
+		Name: "storage",
+		Check: func(ctx context.Context) error {
+			return store.Ping(ctx)
+		},
 	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>EdgeFabric</title></head><body><h1>EdgeFabric Controller</h1><p>API: <a href="/api/v1/">/api/v1/</a></p></body></html>`)
+
+	// Initialize secrets store.
+	secretStore, err := secrets.NewStore(cfg.Controller.Secrets.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("init secrets: %w", err)
+	}
+
+	// Initialize services.
+	authSvc := auth.NewService(store, store, secretStore, "EdgeFabric")
+	tokenSvc := auth.NewTokenService(
+		[]byte(cfg.Controller.Secrets.EncryptionKey), // Derive signing key from encryption key.
+		24*time.Hour,
+	)
+	tenantSvc := tenant.NewService(store)
+	userSvc := user.NewService(store, authSvc)
+	authorizer := rbac.NewAuthorizer()
+	auditLog := audit.NewLogger(store, logger)
+
+	// Seed superuser on first boot.
+	if err := SeedSuperUser(context.Background(), userSvc, store, logger); err != nil {
+		return fmt.Errorf("seed superuser: %w", err)
+	}
+
+	// Assemble API router.
+	handler := api.NewRouter(api.Services{
+		AuthSvc:    authSvc,
+		TokenSvc:   tokenSvc,
+		TenantSvc:  tenantSvc,
+		UserSvc:    userSvc,
+		Authorizer: authorizer,
+		AuditLog:   auditLog,
+		APIKeys:    store,
+		Health:     health,
+		Metrics:    metrics,
+		Logger:     logger,
+		StaticFS:   web.StaticFiles,
 	})
 
 	srv := &http.Server{
 		Addr:         cfg.Controller.ListenAddr,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
