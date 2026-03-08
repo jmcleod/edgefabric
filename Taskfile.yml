@@ -1,0 +1,93 @@
+version: '3'
+
+vars:
+  BINARY_NAME: edgefabric
+  BUILD_DIR: bin
+  MODULE: github.com/jmcleod/edgefabric
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
+  BUILD_TIME:
+    sh: date -u '+%Y-%m-%dT%H:%M:%SZ'
+  LDFLAGS: >-
+    -s -w
+    -X {{.MODULE}}/pkg/version.Version={{.VERSION}}
+    -X {{.MODULE}}/pkg/version.Commit={{.COMMIT}}
+    -X {{.MODULE}}/pkg/version.BuildTime={{.BUILD_TIME}}
+
+tasks:
+  default:
+    desc: Build the binary
+    cmds:
+      - task: build
+
+  build:
+    desc: Build the edgefabric binary
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/edgefabric
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  build-static:
+    desc: Build a fully static binary (Linux)
+    cmds:
+      - CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "{{.LDFLAGS}} -linkmode external -extldflags '-static'" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/edgefabric
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test -race -count=1 ./...
+
+  test-coverage:
+    desc: Run tests with coverage
+    cmds:
+      - go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      - go tool cover -html=coverage.out -o coverage.html
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format code
+    cmds:
+      - gofumpt -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  tidy:
+    desc: Tidy go modules
+    cmds:
+      - go mod tidy
+
+  generate:
+    desc: Run code generation
+    cmds:
+      - go generate ./...
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}} coverage.out coverage.html
+
+  dev:
+    desc: Build and run the controller in development mode
+    cmds:
+      - task: build
+      - ./{{.BUILD_DIR}}/{{.BINARY_NAME}} controller --config config.dev.yaml
+
+  check:
+    desc: Run all checks (lint, vet, test)
+    cmds:
+      - task: lint
+      - task: vet
+      - task: test

@@ -1,0 +1,36 @@
+# Binaries
+/bin/
+/dist/
+edgefabric
+*.exe
+
+# Test
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets
+*.pem
+*.key
+!*_test.go
+
+# Build
+/vendor/
+
+# Generated
+openapi/generated/

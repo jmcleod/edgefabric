@@ -1,0 +1,22 @@
+[Unit]
+Description=EdgeFabric Gateway
+Documentation=https://github.com/jmcleod/edgefabric
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/edgefabric gateway --config /etc/edgefabric/edgefabric.yaml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=edgefabric-gateway
+
+# Gateway needs elevated privileges for WireGuard and packet forwarding.
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

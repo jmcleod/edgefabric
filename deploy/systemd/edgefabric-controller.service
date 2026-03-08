@@ -1,0 +1,27 @@
+[Unit]
+Description=EdgeFabric Controller
+Documentation=https://github.com/jmcleod/edgefabric
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=edgefabric
+Group=edgefabric
+ExecStart=/usr/local/bin/edgefabric controller --config /etc/edgefabric/edgefabric.yaml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=edgefabric-controller
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/edgefabric
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
