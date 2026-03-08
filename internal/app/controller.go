@@ -19,6 +19,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/fleet"
+	"github.com/jmcleod/edgefabric/internal/route"
 	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/provisioning"
@@ -127,6 +128,14 @@ func RunController(cfg *config.Config) error {
 		store, // NodeStore
 	)
 
+	// Initialize route service.
+	routeSvc := route.NewService(
+		store, // RouteStore
+		store, // GatewayStore
+		store, // NodeGroupStore
+		store, // NodeStore
+	)
+
 	// Connect provisioning service to networking for WG config sync.
 	provisioningSvc.SetWireGuardConfigGenerator(networkingSvc)
 
@@ -152,6 +161,7 @@ func RunController(cfg *config.Config) error {
 		NetworkingSvc:   networkingSvc,
 		DNSSvc:          dnsSvc,
 		CDNSvc:          cdnSvc,
+		RouteSvc:        routeSvc,
 		ProvisioningSvc: provisioningSvc,
 		Authorizer:      authorizer,
 		AuditLog:        auditLog,

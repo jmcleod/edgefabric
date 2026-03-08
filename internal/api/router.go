@@ -14,6 +14,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/networking"
+	"github.com/jmcleod/edgefabric/internal/route"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/provisioning"
 	"github.com/jmcleod/edgefabric/internal/rbac"
@@ -33,6 +34,7 @@ type Services struct {
 	NetworkingSvc   networking.Service
 	DNSSvc          dns.Service
 	CDNSvc          cdn.Service
+	RouteSvc        route.Service
 	ProvisioningSvc provisioning.Service
 	Authorizer      rbac.Authorizer
 	AuditLog   audit.Logger
@@ -110,7 +112,7 @@ func NewRouter(svc Services) http.Handler {
 		nodeNetHandler := v1.NewNodeNetworkingHandler(svc.NetworkingSvc, svc.Authorizer)
 		nodeNetHandler.Register(mux, authMW)
 
-		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.DNSSvc, svc.CDNSvc, svc.Authorizer)
+		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.DNSSvc, svc.CDNSvc, svc.RouteSvc, svc.Authorizer)
 		nodeConfigHandler.Register(mux, authMW)
 	}
 
@@ -130,6 +132,15 @@ func NewRouter(svc Services) http.Handler {
 
 		cdnOriginHandler := v1.NewCDNOriginHandler(svc.CDNSvc, svc.Authorizer, svc.AuditLog)
 		cdnOriginHandler.Register(mux, authMW)
+	}
+
+	// Route handlers (CRUD + config sync).
+	if svc.RouteSvc != nil {
+		routeHandler := v1.NewRouteHandler(svc.RouteSvc, svc.Authorizer, svc.AuditLog)
+		routeHandler.Register(mux, authMW)
+
+		gatewayConfigHandler := v1.NewGatewayConfigHandler(svc.RouteSvc, svc.Authorizer)
+		gatewayConfigHandler.Register(mux, authMW)
 	}
 
 	// OpenAPI spec (unauthenticated).

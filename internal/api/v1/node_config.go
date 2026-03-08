@@ -10,21 +10,23 @@ import (
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/rbac"
+	"github.com/jmcleod/edgefabric/internal/route"
 	"github.com/jmcleod/edgefabric/internal/storage"
 )
 
 // NodeConfigHandler serves node configuration files for polling-based sync.
-// Nodes poll these endpoints to get their desired WireGuard, BGP, DNS, and CDN configuration.
+// Nodes poll these endpoints to get their desired WireGuard, BGP, DNS, CDN, and route configuration.
 type NodeConfigHandler struct {
 	svc        networking.Service
 	dnsSvc     dns.Service
 	cdnSvc     cdn.Service
+	routeSvc   route.Service
 	authorizer rbac.Authorizer
 }
 
 // NewNodeConfigHandler creates a new node config handler.
-func NewNodeConfigHandler(svc networking.Service, dnsSvc dns.Service, cdnSvc cdn.Service, authorizer rbac.Authorizer) *NodeConfigHandler {
-	return &NodeConfigHandler{svc: svc, dnsSvc: dnsSvc, cdnSvc: cdnSvc, authorizer: authorizer}
+func NewNodeConfigHandler(svc networking.Service, dnsSvc dns.Service, cdnSvc cdn.Service, routeSvc route.Service, authorizer rbac.Authorizer) *NodeConfigHandler {
+	return &NodeConfigHandler{svc: svc, dnsSvc: dnsSvc, cdnSvc: cdnSvc, routeSvc: routeSvc, authorizer: authorizer}
 }
 
 // Register mounts node config routes on the mux.
@@ -35,6 +37,7 @@ func (h *NodeConfigHandler) Register(mux *http.ServeMux, authMW func(http.Handle
 	mux.Handle("GET /api/v1/nodes/{id}/config/bgp", middleware.Chain(http.HandlerFunc(h.GetBGPConfig), authMW, requireRead))
 	mux.Handle("GET /api/v1/nodes/{id}/config/dns", middleware.Chain(http.HandlerFunc(h.GetDNSConfig), authMW, requireRead))
 	mux.Handle("GET /api/v1/nodes/{id}/config/cdn", middleware.Chain(http.HandlerFunc(h.GetCDNConfig), authMW, requireRead))
+	mux.Handle("GET /api/v1/nodes/{id}/config/routes", middleware.Chain(http.HandlerFunc(h.GetRouteConfig), authMW, requireRead))
 }
 
 // GetWireGuardConfig handles GET /api/v1/nodes/{id}/config/wireguard.
@@ -131,4 +134,31 @@ func (h *NodeConfigHandler) GetCDNConfig(w http.ResponseWriter, r *http.Request)
 	}
 
 	apiutil.JSON(w, http.StatusOK, config)
+}
+
+// GetRouteConfig handles GET /api/v1/nodes/{id}/config/routes.
+// Returns the desired route forwarding config as JSON for the node's route reconciliation loop.
+func (h *NodeConfigHandler) GetRouteConfig(w http.ResponseWriter, r *http.Request) {
+	id, err := apiutil.ParseID(r, "id")
+	if err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	if h.routeSvc == nil {
+		apiutil.WriteError(w, http.StatusNotImplemented, "not_implemented", "route service not available")
+		return
+	}
+
+	routeConfig, err := h.routeSvc.GetNodeRouteConfig(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get route config")
+		return
+	}
+
+	apiutil.JSON(w, http.StatusOK, routeConfig)
 }
