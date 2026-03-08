@@ -1,0 +1,24 @@
+# EdgeFabric Controller — Demo Configuration
+#
+# ⚠️  DEMO ONLY — do NOT use these keys in production.
+# Generate your own with: openssl rand -base64 32
+
+role: controller
+log_level: info
+
+controller:
+  listen_addr: ":8443"
+  external_url: "http://localhost:8443"
+
+  storage:
+    driver: sqlite
+    dsn: "/var/lib/edgefabric/demo.db"
+
+  secrets:
+    encryption_key: "xc2R8DWE8SOjQp+l/h0bE9/l2zC7FuKg6FeiQeaIGsM="
+    token_signing_key: "pQ7k+dOFzG3BqUvR1hN8aJcYmW5xe4TsLrA9bXwK0gE="
+
+  wireguard:
+    listen_port: 51820
+    subnet: "10.100.0.0/16"
+    address: "10.100.0.1/16"
