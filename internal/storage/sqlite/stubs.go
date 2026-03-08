@@ -15,41 +15,8 @@ import (
 // Gateway, WireGuardPeer, and EnrollmentToken stores are implemented in
 // gateway.go, wireguard_peer.go, and enrollment_token.go respectively.
 
-// --- IPAllocationStore stubs (Milestone 5) ---
-
-func (s *SQLiteStore) CreateIPAllocation(ctx context.Context, ip *domain.IPAllocation) error {
-	return fmt.Errorf("IPAllocationStore: not implemented")
-}
-func (s *SQLiteStore) GetIPAllocation(ctx context.Context, id domain.ID) (*domain.IPAllocation, error) {
-	return nil, fmt.Errorf("IPAllocationStore: not implemented")
-}
-func (s *SQLiteStore) ListIPAllocations(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.IPAllocation, int, error) {
-	return nil, 0, fmt.Errorf("IPAllocationStore: not implemented")
-}
-func (s *SQLiteStore) UpdateIPAllocation(ctx context.Context, ip *domain.IPAllocation) error {
-	return fmt.Errorf("IPAllocationStore: not implemented")
-}
-func (s *SQLiteStore) DeleteIPAllocation(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("IPAllocationStore: not implemented")
-}
-
-// --- BGPSessionStore stubs (Milestone 5) ---
-
-func (s *SQLiteStore) CreateBGPSession(ctx context.Context, sess *domain.BGPSession) error {
-	return fmt.Errorf("BGPSessionStore: not implemented")
-}
-func (s *SQLiteStore) GetBGPSession(ctx context.Context, id domain.ID) (*domain.BGPSession, error) {
-	return nil, fmt.Errorf("BGPSessionStore: not implemented")
-}
-func (s *SQLiteStore) ListBGPSessions(ctx context.Context, nodeID domain.ID, params storage.ListParams) ([]*domain.BGPSession, int, error) {
-	return nil, 0, fmt.Errorf("BGPSessionStore: not implemented")
-}
-func (s *SQLiteStore) UpdateBGPSession(ctx context.Context, sess *domain.BGPSession) error {
-	return fmt.Errorf("BGPSessionStore: not implemented")
-}
-func (s *SQLiteStore) DeleteBGPSession(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("BGPSessionStore: not implemented")
-}
+// IPAllocationStore and BGPSessionStore are implemented in
+// ip_allocation.go and bgp_session.go respectively.
 
 // --- DNSZoneStore stubs (Milestone 6) ---
 
