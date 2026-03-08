@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -257,7 +258,7 @@ func (s *ForwarderService) startRoute(rwg route.RouteWithGateway) (*routeRuntime
 		slog.String("route_id", r.ID.String()),
 		slog.String("route_name", r.Name),
 		slog.String("protocol", string(protocol)),
-		slog.String("entry", fmt.Sprintf("%s:%d", r.EntryIP, safePort(r.EntryPort))),
+		slog.String("entry", net.JoinHostPort(r.EntryIP, strconv.Itoa(safePort(r.EntryPort)))),
 		slog.String("gateway_wg_ip", rwg.GatewayWGIP),
 	)
 
@@ -267,7 +268,7 @@ func (s *ForwarderService) startRoute(rwg route.RouteWithGateway) (*routeRuntime
 // startTCPListener binds a TCP listener on EntryIP:EntryPort and starts
 // accepting connections. Each connection is forwarded to the gateway.
 func (s *ForwarderService) startTCPListener(ctx context.Context, rt *routeRuntime) error {
-	addr := fmt.Sprintf("%s:%d", rt.route.EntryIP, safePort(rt.route.EntryPort))
+	addr := net.JoinHostPort(rt.route.EntryIP, strconv.Itoa(safePort(rt.route.EntryPort)))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen tcp %s: %w", addr, err)
@@ -309,7 +310,7 @@ func (s *ForwarderService) tcpRelay(ctx context.Context, clientConn net.Conn, rt
 
 	// Connect to gateway on overlay network.
 	// Node sends to GatewayWGIP:EntryPort — the gateway listens there.
-	gwAddr := fmt.Sprintf("%s:%d", rt.gatewayWGIP, safePort(rt.route.EntryPort))
+	gwAddr := net.JoinHostPort(rt.gatewayWGIP, strconv.Itoa(safePort(rt.route.EntryPort)))
 	gwConn, err := net.DialTimeout("tcp", gwAddr, 10*time.Second)
 	if err != nil {
 		s.logger.Error("tcp dial gateway failed",
@@ -345,7 +346,7 @@ func (s *ForwarderService) tcpRelay(ctx context.Context, clientConn net.Conn, rt
 // startUDPListener binds a UDP listener on EntryIP:EntryPort and starts
 // forwarding packets to the gateway, maintaining a session map for return traffic.
 func (s *ForwarderService) startUDPListener(ctx context.Context, rt *routeRuntime) error {
-	addr := fmt.Sprintf("%s:%d", rt.route.EntryIP, safePort(rt.route.EntryPort))
+	addr := net.JoinHostPort(rt.route.EntryIP, strconv.Itoa(safePort(rt.route.EntryPort)))
 	conn, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return fmt.Errorf("listen udp %s: %w", addr, err)
@@ -368,7 +369,7 @@ func (s *ForwarderService) udpReadLoop(ctx context.Context, conn net.PacketConn,
 	var sessions sync.Map // clientAddr string → *udpSession
 
 	buf := make([]byte, 65535)
-	gwAddr := fmt.Sprintf("%s:%d", rt.gatewayWGIP, safePort(rt.route.EntryPort))
+	gwAddr := net.JoinHostPort(rt.gatewayWGIP, strconv.Itoa(safePort(rt.route.EntryPort)))
 
 	for {
 		select {

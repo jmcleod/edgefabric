@@ -64,12 +64,13 @@ type SecretsConfig struct {
 
 // NodeConfig holds node-specific settings.
 type NodeConfig struct {
-	ControllerAddr  string    `yaml:"controller_addr"`
-	EnrollmentToken string    `yaml:"enrollment_token,omitempty"`
-	DataDir         string    `yaml:"data_dir"`
-	BGP             BGPConfig `yaml:"bgp,omitempty"`
-	DNS             DNSConfig `yaml:"dns,omitempty"`
-	CDN             CDNConfig `yaml:"cdn,omitempty"`
+	ControllerAddr  string      `yaml:"controller_addr"`
+	EnrollmentToken string      `yaml:"enrollment_token,omitempty"`
+	DataDir         string      `yaml:"data_dir"`
+	BGP             BGPConfig   `yaml:"bgp,omitempty"`
+	DNS             DNSConfig   `yaml:"dns,omitempty"`
+	CDN             CDNConfig   `yaml:"cdn,omitempty"`
+	Route           RouteConfig `yaml:"route,omitempty"`
 }
 
 // BGPConfig holds BGP runtime settings for a node.
@@ -94,11 +95,19 @@ type CDNConfig struct {
 	Mode       string `yaml:"mode,omitempty"`        // "proxy" or "noop", defaults to "noop"
 }
 
+// RouteConfig holds route forwarding runtime settings for a node.
+type RouteConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Mode    string `yaml:"mode,omitempty"` // "forwarder" or "noop", defaults to "noop"
+}
+
 // GatewayConfig holds gateway-specific settings.
 type GatewayConfig struct {
 	ControllerAddr  string `yaml:"controller_addr"`
 	EnrollmentToken string `yaml:"enrollment_token,omitempty"`
 	DataDir         string `yaml:"data_dir"`
+	WireGuardIP     string `yaml:"wireguard_ip,omitempty"` // Gateway's overlay IP for route listeners.
+	RouteMode       string `yaml:"route_mode,omitempty"`   // "forwarder" or "noop", defaults to "noop"
 }
 
 // Load reads and parses a YAML config file, then applies environment variable

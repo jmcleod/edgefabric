@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -240,8 +241,8 @@ func (s *ForwarderService) startRoute(r *domain.Route) (*routeRuntime, error) {
 		slog.String("route_id", r.ID.String()),
 		slog.String("route_name", r.Name),
 		slog.String("protocol", string(r.Protocol)),
-		slog.String("listen", fmt.Sprintf("%s:%d", s.wireGuardIP, safePort(r.EntryPort))),
-		slog.String("destination", fmt.Sprintf("%s:%d", r.DestinationIP, safePort(r.DestinationPort))),
+		slog.String("listen", net.JoinHostPort(s.wireGuardIP, strconv.Itoa(safePort(r.EntryPort)))),
+		slog.String("destination", net.JoinHostPort(r.DestinationIP, strconv.Itoa(safePort(r.DestinationPort)))),
 	)
 
 	return rt, nil
@@ -249,7 +250,7 @@ func (s *ForwarderService) startRoute(r *domain.Route) (*routeRuntime, error) {
 
 // startTCPListener binds on WireGuardIP:EntryPort and forwards to DestinationIP:DestinationPort.
 func (s *ForwarderService) startTCPListener(ctx context.Context, rt *routeRuntime) error {
-	addr := fmt.Sprintf("%s:%d", s.wireGuardIP, safePort(rt.route.EntryPort))
+	addr := net.JoinHostPort(s.wireGuardIP, strconv.Itoa(safePort(rt.route.EntryPort)))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen tcp %s: %w", addr, err)
@@ -289,7 +290,7 @@ func (s *ForwarderService) tcpRelay(ctx context.Context, clientConn net.Conn, rt
 	}()
 
 	// Connect to private destination.
-	destAddr := fmt.Sprintf("%s:%d", rt.route.DestinationIP, safePort(rt.route.DestinationPort))
+	destAddr := net.JoinHostPort(rt.route.DestinationIP, strconv.Itoa(safePort(rt.route.DestinationPort)))
 	destConn, err := net.DialTimeout("tcp", destAddr, 10*time.Second)
 	if err != nil {
 		s.logger.Error("gateway tcp dial destination failed",
@@ -322,7 +323,7 @@ func (s *ForwarderService) tcpRelay(ctx context.Context, clientConn net.Conn, rt
 
 // startUDPListener binds on WireGuardIP:EntryPort and forwards to DestinationIP:DestinationPort.
 func (s *ForwarderService) startUDPListener(ctx context.Context, rt *routeRuntime) error {
-	addr := fmt.Sprintf("%s:%d", s.wireGuardIP, safePort(rt.route.EntryPort))
+	addr := net.JoinHostPort(s.wireGuardIP, strconv.Itoa(safePort(rt.route.EntryPort)))
 	conn, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return fmt.Errorf("listen udp %s: %w", addr, err)
@@ -342,7 +343,7 @@ type udpSession struct {
 func (s *ForwarderService) udpReadLoop(ctx context.Context, conn net.PacketConn, rt *routeRuntime) {
 	var sessions sync.Map
 	buf := make([]byte, 65535)
-	destAddr := fmt.Sprintf("%s:%d", rt.route.DestinationIP, safePort(rt.route.DestinationPort))
+	destAddr := net.JoinHostPort(rt.route.DestinationIP, strconv.Itoa(safePort(rt.route.DestinationPort)))
 
 	for {
 		select {

@@ -13,6 +13,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/dnsserver"
 	"github.com/jmcleod/edgefabric/internal/observability"
+	"github.com/jmcleod/edgefabric/internal/routeserver"
 )
 
 // RunNode starts the node process.
@@ -25,6 +26,7 @@ func RunNode(cfg *config.Config) error {
 		slog.Bool("bgp_enabled", cfg.Node.BGP.Enabled),
 		slog.Bool("dns_enabled", cfg.Node.DNS.Enabled),
 		slog.Bool("cdn_enabled", cfg.Node.CDN.Enabled),
+		slog.Bool("route_enabled", cfg.Node.Route.Enabled),
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -107,10 +109,39 @@ func RunNode(cfg *config.Config) error {
 		}
 	}
 
+	// Initialize route forwarding service if enabled.
+	var routeSvc routeserver.Service
+	if cfg.Node.Route.Enabled {
+		routeSvc = initRouteService(cfg.Node.Route, logger)
+		if routeSvc != nil {
+			if err := routeSvc.Start(ctx); err != nil {
+				logger.Error("failed to start route service", slog.String("error", err.Error()))
+			} else {
+				logger.Info("route service started",
+					slog.String("mode", cfg.Node.Route.Mode),
+				)
+
+				// Start route reconciliation loop.
+				go routeReconcileLoop(ctx, routeSvc, cfg.Node.ControllerAddr, logger)
+			}
+		}
+	}
+
 	// TODO: Connect to controller over WireGuard.
 
 	<-ctx.Done()
 	logger.Info("shutting down node")
+
+	// Graceful shutdown of route forwarding (before CDN, DNS, BGP).
+	if routeSvc != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := routeSvc.Stop(shutdownCtx); err != nil {
+			logger.Error("failed to stop route service", slog.String("error", err.Error()))
+		} else {
+			logger.Info("route service stopped")
+		}
+	}
 
 	// Graceful shutdown of CDN (before DNS and BGP).
 	if cdnSvc != nil {
@@ -265,6 +296,46 @@ func cdnReconcileLoop(ctx context.Context, svc cdnserver.Service, controllerAddr
 			// and call svc.Reconcile(ctx, config).
 			// For now, just log that reconciliation would happen.
 			logger.Debug("CDN reconciliation tick",
+				slog.String("controller", controllerAddr),
+			)
+		}
+	}
+}
+
+// initRouteService creates the appropriate route forwarding service based on config mode.
+func initRouteService(cfg config.RouteConfig, logger *slog.Logger) routeserver.Service {
+	mode := cfg.Mode
+	if mode == "" {
+		mode = "noop"
+	}
+
+	switch mode {
+	case "forwarder":
+		logger.Info("using route forwarder service")
+		return routeserver.NewForwarderService(logger)
+	case "noop":
+		logger.Info("using noop route service (demo mode)")
+		return routeserver.NewNoopService()
+	default:
+		logger.Error("unknown route mode, falling back to noop", slog.String("mode", mode))
+		return routeserver.NewNoopService()
+	}
+}
+
+// routeReconcileLoop periodically polls the controller for desired route state
+// and reconciles the local route forwarding service to match. Runs every 30 seconds.
+func routeReconcileLoop(ctx context.Context, svc routeserver.Service, controllerAddr string, logger *slog.Logger) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// TODO: Poll GET /api/v1/nodes/{id}/config/routes from controller
+			// and call svc.Reconcile(ctx, config).
+			logger.Debug("route reconciliation tick",
 				slog.String("controller", controllerAddr),
 			)
 		}
