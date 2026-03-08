@@ -76,7 +76,25 @@ type GatewayConfig struct {
 	DataDir         string `yaml:"data_dir"`
 }
 
-// Load reads and parses a YAML config file.
+// Load reads and parses a YAML config file, then applies environment variable
+// overrides. Environment variables take precedence over YAML values, enabling
+// twelve-factor-style configuration in container deployments.
+//
+// Supported environment variables:
+//
+//	EF_ROLE                           → role
+//	EF_LOG_LEVEL                      → log_level
+//	EF_CONTROLLER_LISTEN_ADDR         → controller.listen_addr
+//	EF_CONTROLLER_EXTERNAL_URL        → controller.external_url
+//	EF_CONTROLLER_STORAGE_DRIVER      → controller.storage.driver
+//	EF_CONTROLLER_STORAGE_DSN         → controller.storage.dsn
+//	EF_CONTROLLER_SECRETS_ENCRYPTION_KEY → controller.secrets.encryption_key
+//	EF_NODE_CONTROLLER_ADDR           → node.controller_addr
+//	EF_NODE_ENROLLMENT_TOKEN          → node.enrollment_token
+//	EF_NODE_DATA_DIR                  → node.data_dir
+//	EF_GATEWAY_CONTROLLER_ADDR        → gateway.controller_addr
+//	EF_GATEWAY_ENROLLMENT_TOKEN       → gateway.enrollment_token
+//	EF_GATEWAY_DATA_DIR               → gateway.data_dir
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -88,11 +106,47 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config file: %w", err)
 	}
 
+	cfg.applyEnvOverrides()
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
 	return cfg, nil
+}
+
+// applyEnvOverrides applies environment variable overrides to the config.
+// Each EF_-prefixed variable overrides the corresponding YAML field.
+// Only non-empty environment values are applied.
+func (c *Config) applyEnvOverrides() {
+	envStr := func(key string, dst *string) {
+		if v, ok := os.LookupEnv(key); ok && v != "" {
+			*dst = v
+		}
+	}
+
+	// Top-level.
+	if v, ok := os.LookupEnv("EF_ROLE"); ok && v != "" {
+		c.Role = RoleType(v)
+	}
+	envStr("EF_LOG_LEVEL", &c.LogLevel)
+
+	// Controller.
+	envStr("EF_CONTROLLER_LISTEN_ADDR", &c.Controller.ListenAddr)
+	envStr("EF_CONTROLLER_EXTERNAL_URL", &c.Controller.ExternalURL)
+	envStr("EF_CONTROLLER_STORAGE_DRIVER", &c.Controller.Storage.Driver)
+	envStr("EF_CONTROLLER_STORAGE_DSN", &c.Controller.Storage.DSN)
+	envStr("EF_CONTROLLER_SECRETS_ENCRYPTION_KEY", &c.Controller.Secrets.EncryptionKey)
+
+	// Node.
+	envStr("EF_NODE_CONTROLLER_ADDR", &c.Node.ControllerAddr)
+	envStr("EF_NODE_ENROLLMENT_TOKEN", &c.Node.EnrollmentToken)
+	envStr("EF_NODE_DATA_DIR", &c.Node.DataDir)
+
+	// Gateway.
+	envStr("EF_GATEWAY_CONTROLLER_ADDR", &c.Gateway.ControllerAddr)
+	envStr("EF_GATEWAY_ENROLLMENT_TOKEN", &c.Gateway.EnrollmentToken)
+	envStr("EF_GATEWAY_DATA_DIR", &c.Gateway.DataDir)
 }
 
 // Validate checks that the configuration is internally consistent.
