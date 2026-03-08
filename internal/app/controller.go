@@ -15,7 +15,9 @@ import (
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
 	"github.com/jmcleod/edgefabric/internal/config"
+	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/fleet"
+	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/provisioning"
 	"github.com/jmcleod/edgefabric/internal/rbac"
@@ -97,6 +99,28 @@ func RunController(cfg *config.Config) error {
 		cfg.Controller.ExternalURL,
 	)
 
+	// Initialize networking service.
+	networkingSvc := networking.NewService(
+		store, // NodeStore
+		store, // WireGuardPeerStore
+		store, // BGPSessionStore
+		store, // IPAllocationStore
+		secretStore,
+		cfg.Controller.WireGuard,
+	)
+
+	// Bootstrap controller's WireGuard peer (idempotent).
+	if _, err := networking.BootstrapControllerPeer(
+		context.Background(),
+		store,
+		secretStore,
+		cfg.Controller.WireGuard,
+		domain.ControllerPeerID,
+	); err != nil {
+		return fmt.Errorf("bootstrap controller wireguard peer: %w", err)
+	}
+	logger.Info("controller wireguard peer bootstrapped")
+
 	// Assemble API router.
 	handler := api.NewRouter(api.Services{
 		AuthSvc:         authSvc,
@@ -104,6 +128,7 @@ func RunController(cfg *config.Config) error {
 		TenantSvc:       tenantSvc,
 		UserSvc:         userSvc,
 		FleetSvc:        fleetSvc,
+		NetworkingSvc:   networkingSvc,
 		ProvisioningSvc: provisioningSvc,
 		Authorizer:      authorizer,
 		AuditLog:        auditLog,

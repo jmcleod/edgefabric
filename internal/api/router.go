@@ -11,6 +11,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
 	"github.com/jmcleod/edgefabric/internal/fleet"
+	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/provisioning"
 	"github.com/jmcleod/edgefabric/internal/rbac"
@@ -27,6 +28,7 @@ type Services struct {
 	TenantSvc  tenant.Service
 	UserSvc    user.Service
 	FleetSvc        fleet.Service
+	NetworkingSvc   networking.Service
 	ProvisioningSvc provisioning.Service
 	Authorizer      rbac.Authorizer
 	AuditLog   audit.Logger
@@ -88,6 +90,21 @@ func NewRouter(svc Services) http.Handler {
 	if svc.FleetSvc != nil {
 		gatewayHandler := v1.NewGatewayHandler(svc.FleetSvc, svc.Authorizer, svc.AuditLog)
 		gatewayHandler.Register(mux, authMW)
+	}
+
+	// Networking handlers (BGP sessions, IP allocations, WireGuard peers, node networking state).
+	if svc.NetworkingSvc != nil {
+		bgpHandler := v1.NewBGPSessionHandler(svc.NetworkingSvc, svc.Authorizer, svc.AuditLog)
+		bgpHandler.Register(mux, authMW)
+
+		ipAllocHandler := v1.NewIPAllocationHandler(svc.NetworkingSvc, svc.Authorizer, svc.AuditLog)
+		ipAllocHandler.Register(mux, authMW)
+
+		wgHandler := v1.NewWireGuardHandler(svc.NetworkingSvc, svc.Authorizer)
+		wgHandler.Register(mux, authMW)
+
+		nodeNetHandler := v1.NewNodeNetworkingHandler(svc.NetworkingSvc, svc.Authorizer)
+		nodeNetHandler.Register(mux, authMW)
 	}
 
 	// OpenAPI spec (unauthenticated).
