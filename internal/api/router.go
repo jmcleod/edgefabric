@@ -15,6 +15,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/storage"
 	"github.com/jmcleod/edgefabric/internal/tenant"
 	"github.com/jmcleod/edgefabric/internal/user"
+	"github.com/jmcleod/edgefabric/openapi"
 )
 
 // Services groups all service dependencies needed by the API router.
@@ -51,6 +52,12 @@ func NewRouter(svc Services) http.Handler {
 
 	auditHandler := v1.NewAuditHandler(svc.AuditLog, svc.Authorizer)
 	auditHandler.Register(mux, authMW)
+
+	// OpenAPI spec (unauthenticated).
+	mux.HandleFunc("GET /api/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml")
+		w.Write(openapi.V1Spec)
+	})
 
 	// Infrastructure endpoints (unauthenticated).
 	mux.Handle("/healthz", svc.Health.Handler())

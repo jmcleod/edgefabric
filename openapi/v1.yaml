@@ -1,0 +1,731 @@
+openapi: "3.0.3"
+info:
+  title: EdgeFabric Controller API
+  description: |
+    REST API for the EdgeFabric distributed edge networking platform.
+    Provides multi-tenant management, user authentication (password + TOTP 2FA),
+    API key management, and audit logging.
+  version: "1.0.0"
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8443
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+    description: Authentication, TOTP enrollment, and session management
+  - name: Tenants
+    description: Multi-tenant management (SuperUser only for mutations)
+  - name: Users
+    description: User CRUD operations
+  - name: API Keys
+    description: Programmatic access credential management
+  - name: Audit
+    description: Immutable audit event log
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Login successful (or TOTP required)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/totp/verify:
+    post:
+      tags: [Auth]
+      summary: Verify TOTP code after login
+      description: Complete 2FA by providing a valid TOTP code. Use the token from the login response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: "^[0-9]{6}$"
+      responses:
+        "200":
+          description: TOTP verified, new session token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/totp/enroll:
+    post:
+      tags: [Auth]
+      summary: Start TOTP enrollment
+      description: |
+        Generates a TOTP secret and provisioning URI. The secret is stored
+        encrypted but TOTP is NOT enabled until confirmed via /totp/confirm.
+      responses:
+        "200":
+          description: TOTP enrollment started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TOTPEnrollResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/totp/confirm:
+    post:
+      tags: [Auth]
+      summary: Confirm TOTP enrollment with a code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: "^[0-9]{6}$"
+      responses:
+        "200":
+          description: TOTP enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: totp_enabled
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/tenants:
+    get:
+      tags: [Tenants]
+      summary: List tenants
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of tenants
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Tenants]
+      summary: Create a tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug]
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                  pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+                  minLength: 2
+      responses:
+        "201":
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Tenant"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/tenants/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Tenants]
+      summary: Get a tenant by ID
+      responses:
+        "200":
+          description: Tenant details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Tenant"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Tenants]
+      summary: Update a tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  $ref: "#/components/schemas/TenantStatus"
+      responses:
+        "200":
+          description: Tenant updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Tenant"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Tenants]
+      summary: Soft-delete a tenant
+      description: Sets the tenant status to "deleted". The record is not removed from the database.
+      responses:
+        "204":
+          description: Tenant deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/users:
+    get:
+      tags: [Users]
+      summary: List users
+      description: Non-superusers see only their tenant's users.
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+    post:
+      tags: [Users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, password, role]
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+                  description: Required for non-superuser roles. Must be omitted for superusers.
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+                role:
+                  $ref: "#/components/schemas/Role"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Email already in use
+
+  /api/v1/users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Users]
+      summary: Get a user by ID
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_User"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Users]
+      summary: Update a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+                role:
+                  $ref: "#/components/schemas/Role"
+                status:
+                  $ref: "#/components/schemas/UserStatus"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_User"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      responses:
+        "204":
+          description: User deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/api-keys:
+    get:
+      tags: [API Keys]
+      summary: List API keys for the caller's tenant
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of API keys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIKeyListResponse"
+    post:
+      tags: [API Keys]
+      summary: Create an API key
+      description: |
+        Generates a new API key. The raw key is returned once in the response
+        and cannot be retrieved again. Store it securely.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, role]
+              properties:
+                name:
+                  type: string
+                role:
+                  $ref: "#/components/schemas/Role"
+      responses:
+        "201":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAPIKeyResponse"
+
+  /api/v1/api-keys/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    delete:
+      tags: [API Keys]
+      summary: Delete an API key
+      responses:
+        "204":
+          description: API key deleted
+
+  /api/v1/audit-events:
+    get:
+      tags: [Audit]
+      summary: List audit events
+      description: SuperUsers see all events; tenant-scoped users see only their tenant's events.
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of audit events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventListResponse"
+
+  /healthz:
+    get:
+      tags: [Infrastructure]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Healthy
+        "503":
+          description: Unhealthy
+
+  /metrics:
+    get:
+      tags: [Infrastructure]
+      summary: Prometheus metrics
+      security: []
+      responses:
+        "200":
+          description: Prometheus text format metrics
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Session token (from /auth/login) or API key (prefixed with ef_).
+        Example: `Authorization: Bearer <token>` or `Authorization: Bearer ef_<key>`
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+
+  schemas:
+    Role:
+      type: string
+      enum: [superuser, admin, readonly]
+
+    TenantStatus:
+      type: string
+      enum: [active, suspended, deleted]
+
+    UserStatus:
+      type: string
+      enum: [active, disabled]
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        status:
+          $ref: "#/components/schemas/TenantStatus"
+        settings:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        totp_enabled:
+          type: boolean
+        role:
+          $ref: "#/components/schemas/Role"
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    APIKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        key_prefix:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        api_key_id:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          type: string
+        resource:
+          type: string
+        details:
+          type: object
+        source_ip:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+            totp_required:
+              type: boolean
+
+    TokenResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+
+    TOTPEnrollResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            secret:
+              type: string
+            provisioning_uri:
+              type: string
+
+    CreateAPIKeyResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            raw_key:
+              type: string
+              description: The full API key (shown once, cannot be retrieved again)
+            api_key:
+              $ref: "#/components/schemas/APIKey"
+
+    DataResponse_Tenant:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Tenant"
+
+    DataResponse_User:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/User"
+
+    TenantListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tenant"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    UserListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    APIKeyListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/APIKey"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    AuditEventListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication required or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
