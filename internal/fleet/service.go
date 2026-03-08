@@ -30,8 +30,15 @@ type Service interface {
 	CreateNodeGroup(ctx context.Context, req CreateNodeGroupRequest) (*domain.NodeGroup, error)
 	GetNodeGroup(ctx context.Context, id domain.ID) (*domain.NodeGroup, error)
 	ListNodeGroups(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.NodeGroup, int, error)
+	DeleteNodeGroup(ctx context.Context, id domain.ID) error
 	AddNodeToGroup(ctx context.Context, groupID, nodeID domain.ID) error
 	RemoveNodeFromGroup(ctx context.Context, groupID, nodeID domain.ID) error
+
+	// SSH Keys (global resource — SuperUser only for mutations)
+	CreateSSHKey(ctx context.Context, k *domain.SSHKey) error
+	GetSSHKey(ctx context.Context, id domain.ID) (*domain.SSHKey, error)
+	ListSSHKeys(ctx context.Context, params storage.ListParams) ([]*domain.SSHKey, int, error)
+	DeleteSSHKey(ctx context.Context, id domain.ID) error
 }
 
 // CreateNodeRequest holds the input for creating a node.

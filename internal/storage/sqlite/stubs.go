@@ -1,6 +1,6 @@
 package sqlite
 
-// Stub implementations for store interfaces not yet needed (Milestone 2+).
+// Stub implementations for store interfaces not yet needed (Milestone 3+).
 // These satisfy the storage.Store interface contract at compile time.
 // Each will be replaced with a real implementation in its respective milestone.
 
@@ -12,58 +12,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/storage"
 )
 
-// --- NodeStore stubs (Milestone 2) ---
-
-func (s *SQLiteStore) CreateNode(ctx context.Context, n *domain.Node) error {
-	return fmt.Errorf("NodeStore: not implemented")
-}
-func (s *SQLiteStore) GetNode(ctx context.Context, id domain.ID) (*domain.Node, error) {
-	return nil, fmt.Errorf("NodeStore: not implemented")
-}
-func (s *SQLiteStore) ListNodes(ctx context.Context, tenantID *domain.ID, params storage.ListParams) ([]*domain.Node, int, error) {
-	return nil, 0, fmt.Errorf("NodeStore: not implemented")
-}
-func (s *SQLiteStore) UpdateNode(ctx context.Context, n *domain.Node) error {
-	return fmt.Errorf("NodeStore: not implemented")
-}
-func (s *SQLiteStore) DeleteNode(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("NodeStore: not implemented")
-}
-func (s *SQLiteStore) UpdateNodeHeartbeat(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("NodeStore: not implemented")
-}
-
-// --- NodeGroupStore stubs (Milestone 2) ---
-
-func (s *SQLiteStore) CreateNodeGroup(ctx context.Context, g *domain.NodeGroup) error {
-	return fmt.Errorf("NodeGroupStore: not implemented")
-}
-func (s *SQLiteStore) GetNodeGroup(ctx context.Context, id domain.ID) (*domain.NodeGroup, error) {
-	return nil, fmt.Errorf("NodeGroupStore: not implemented")
-}
-func (s *SQLiteStore) ListNodeGroups(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.NodeGroup, int, error) {
-	return nil, 0, fmt.Errorf("NodeGroupStore: not implemented")
-}
-func (s *SQLiteStore) UpdateNodeGroup(ctx context.Context, g *domain.NodeGroup) error {
-	return fmt.Errorf("NodeGroupStore: not implemented")
-}
-func (s *SQLiteStore) DeleteNodeGroup(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("NodeGroupStore: not implemented")
-}
-func (s *SQLiteStore) AddNodeToGroup(ctx context.Context, groupID, nodeID domain.ID) error {
-	return fmt.Errorf("NodeGroupStore: not implemented")
-}
-func (s *SQLiteStore) RemoveNodeFromGroup(ctx context.Context, groupID, nodeID domain.ID) error {
-	return fmt.Errorf("NodeGroupStore: not implemented")
-}
-func (s *SQLiteStore) ListGroupNodes(ctx context.Context, groupID domain.ID) ([]*domain.Node, error) {
-	return nil, fmt.Errorf("NodeGroupStore: not implemented")
-}
-func (s *SQLiteStore) ListNodeGroups_ByNode(ctx context.Context, nodeID domain.ID) ([]*domain.NodeGroup, error) {
-	return nil, fmt.Errorf("NodeGroupStore: not implemented")
-}
-
-// --- GatewayStore stubs (Milestone 2) ---
+// --- GatewayStore stubs (Milestone 2 — deferred to node agent phase) ---
 
 func (s *SQLiteStore) CreateGateway(ctx context.Context, g *domain.Gateway) error {
 	return fmt.Errorf("GatewayStore: not implemented")
@@ -105,7 +54,7 @@ func (s *SQLiteStore) DeleteWireGuardPeer(ctx context.Context, id domain.ID) err
 	return fmt.Errorf("WireGuardPeerStore: not implemented")
 }
 
-// --- IPAllocationStore stubs (Milestone 2) ---
+// --- IPAllocationStore stubs (Milestone 5) ---
 
 func (s *SQLiteStore) CreateIPAllocation(ctx context.Context, ip *domain.IPAllocation) error {
 	return fmt.Errorf("IPAllocationStore: not implemented")
@@ -232,21 +181,6 @@ func (s *SQLiteStore) UpdateRoute(ctx context.Context, r *domain.Route) error {
 }
 func (s *SQLiteStore) DeleteRoute(ctx context.Context, id domain.ID) error {
 	return fmt.Errorf("RouteStore: not implemented")
-}
-
-// --- SSHKeyStore stubs (Milestone 2) ---
-
-func (s *SQLiteStore) CreateSSHKey(ctx context.Context, k *domain.SSHKey) error {
-	return fmt.Errorf("SSHKeyStore: not implemented")
-}
-func (s *SQLiteStore) GetSSHKey(ctx context.Context, id domain.ID) (*domain.SSHKey, error) {
-	return nil, fmt.Errorf("SSHKeyStore: not implemented")
-}
-func (s *SQLiteStore) ListSSHKeys(ctx context.Context, params storage.ListParams) ([]*domain.SSHKey, int, error) {
-	return nil, 0, fmt.Errorf("SSHKeyStore: not implemented")
-}
-func (s *SQLiteStore) DeleteSSHKey(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("SSHKeyStore: not implemented")
 }
 
 // --- TLSCertificateStore stubs (Milestone 7) ---

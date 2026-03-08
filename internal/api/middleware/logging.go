@@ -44,6 +44,11 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.String("remote_addr", r.RemoteAddr),
 			}
 
+			// Include request ID for correlation.
+			if reqID := RequestIDFromContext(r.Context()); reqID != "" {
+				attrs = append(attrs, slog.String("request_id", reqID))
+			}
+
 			// Include user ID if authenticated.
 			if claims := ClaimsFromContext(r.Context()); claims != nil {
 				attrs = append(attrs, slog.String("user_id", claims.UserID.String()))

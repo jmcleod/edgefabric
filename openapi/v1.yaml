@@ -4,8 +4,9 @@ info:
   description: |
     REST API for the EdgeFabric distributed edge networking platform.
     Provides multi-tenant management, user authentication (password + TOTP 2FA),
-    API key management, and audit logging.
-  version: "1.0.0"
+    API key management, fleet management (nodes, node groups, SSH keys),
+    audit logging, and status dashboard.
+  version: "1.1.0"
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -24,10 +25,18 @@ tags:
     description: Multi-tenant management (SuperUser only for mutations)
   - name: Users
     description: User CRUD operations
+  - name: Nodes
+    description: Edge node inventory management
+  - name: Node Groups
+    description: Logical grouping of nodes for targeting configuration
+  - name: SSH Keys
+    description: Global SSH key management (SuperUser only for mutations)
   - name: API Keys
     description: Programmatic access credential management
   - name: Audit
     description: Immutable audit event log
+  - name: Status
+    description: Fleet dashboard and status overview
 
 paths:
   /api/v1/auth/login:
@@ -403,6 +412,355 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuditEventListResponse"
 
+  /api/v1/nodes:
+    get:
+      tags: [Nodes]
+      summary: List nodes
+      description: Non-superusers see only their tenant's nodes. SuperUsers see all nodes.
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of nodes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Nodes]
+      summary: Create a node
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, hostname, public_ip]
+              properties:
+                name:
+                  type: string
+                hostname:
+                  type: string
+                public_ip:
+                  type: string
+                  format: ipv4
+                region:
+                  type: string
+                provider:
+                  type: string
+                ssh_port:
+                  type: integer
+                  default: 22
+                ssh_user:
+                  type: string
+                  default: root
+      responses:
+        "201":
+          description: Node created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Node"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Node already exists
+
+  /api/v1/nodes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Nodes]
+      summary: Get a node by ID
+      description: Enforces tenant isolation for non-superuser callers.
+      responses:
+        "200":
+          description: Node details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Node"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Nodes]
+      summary: Update a node
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                tenant_id:
+                  type: string
+                  format: uuid
+                status:
+                  $ref: "#/components/schemas/NodeStatus"
+                region:
+                  type: string
+      responses:
+        "200":
+          description: Node updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Node"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Nodes]
+      summary: Delete a node
+      responses:
+        "204":
+          description: Node deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/nodes/{id}/heartbeat:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      tags: [Nodes]
+      summary: Record a node heartbeat
+      description: Updates the node's last heartbeat timestamp and sets status to online.
+      responses:
+        "200":
+          description: Heartbeat recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: ok
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/node-groups:
+    get:
+      tags: [Node Groups]
+      summary: List node groups
+      description: |
+        Returns node groups for a tenant. Non-superusers see only their tenant's groups.
+        SuperUsers must provide a tenant_id query parameter.
+      parameters:
+        - name: tenant_id
+          in: query
+          description: Required for SuperUser callers to scope the list.
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of node groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeGroupListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Node Groups]
+      summary: Create a node group
+      description: Tenant is inferred from caller's claims for non-superusers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+                  description: Required for SuperUser. Inferred from token for tenant-scoped users.
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "201":
+          description: Node group created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_NodeGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Node group already exists
+
+  /api/v1/node-groups/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Node Groups]
+      summary: Get a node group by ID
+      description: Enforces tenant isolation for non-superuser callers.
+      responses:
+        "200":
+          description: Node group details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_NodeGroup"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Node Groups]
+      summary: Delete a node group
+      description: Enforces tenant isolation. Removes the group and its memberships.
+      responses:
+        "204":
+          description: Node group deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/node-groups/{id}/nodes/{nodeId}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Node Groups]
+      summary: Add a node to a group
+      description: Both the group and the node must exist.
+      responses:
+        "204":
+          description: Node added to group
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Node already in group
+    delete:
+      tags: [Node Groups]
+      summary: Remove a node from a group
+      responses:
+        "204":
+          description: Node removed from group
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/ssh-keys:
+    get:
+      tags: [SSH Keys]
+      summary: List SSH keys
+      description: Returns all SSH keys. Private keys are never included in responses.
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of SSH keys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SSHKeyListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [SSH Keys]
+      summary: Create an SSH key
+      description: |
+        Only SuperUsers can create SSH keys. SSH keys are a global resource
+        (not tenant-scoped). The private key is stored encrypted at rest
+        and never returned in API responses.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, public_key, private_key]
+              properties:
+                name:
+                  type: string
+                public_key:
+                  type: string
+                private_key:
+                  type: string
+                  description: Must be pre-encrypted or will be encrypted at rest.
+      responses:
+        "201":
+          description: SSH key created (private key stripped from response)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_SSHKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: SSH key already exists
+
+  /api/v1/ssh-keys/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [SSH Keys]
+      summary: Get an SSH key by ID
+      description: Private key is never included in the response.
+      responses:
+        "200":
+          description: SSH key details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_SSHKey"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [SSH Keys]
+      summary: Delete an SSH key
+      description: Only SuperUsers can delete SSH keys.
+      responses:
+        "204":
+          description: SSH key deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/status:
+    get:
+      tags: [Status]
+      summary: Fleet status dashboard
+      description: |
+        Returns a fleet overview including user count, node count, and nodes
+        grouped by status. SuperUsers additionally see tenant count.
+        Requires authentication and read permission on nodes.
+      responses:
+        "200":
+          description: Fleet status overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Status"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /healthz:
     get:
       tags: [Infrastructure]
@@ -582,6 +940,123 @@ components:
           type: string
           format: date-time
 
+    NodeStatus:
+      type: string
+      enum: [pending, enrolling, online, offline, error, decommissioned]
+
+    NodeCapability:
+      type: string
+      enum: [bgp, dns, cdn, route]
+
+    Node:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        hostname:
+          type: string
+        public_ip:
+          type: string
+        wireguard_ip:
+          type: string
+        status:
+          $ref: "#/components/schemas/NodeStatus"
+        region:
+          type: string
+        provider:
+          type: string
+        ssh_port:
+          type: integer
+        ssh_user:
+          type: string
+        ssh_key_id:
+          type: string
+          format: uuid
+          nullable: true
+        binary_version:
+          type: string
+        last_heartbeat:
+          type: string
+          format: date-time
+          nullable: true
+        capabilities:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeCapability"
+        metadata:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    NodeGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SSHKey:
+      type: object
+      description: SSH key (private key is never returned in API responses).
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        public_key:
+          type: string
+        fingerprint:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_rotated_at:
+          type: string
+          format: date-time
+
+    StatusOverview:
+      type: object
+      properties:
+        version:
+          type: string
+        tenant_count:
+          type: integer
+          description: Only included for SuperUser callers.
+        user_count:
+          type: integer
+        node_count:
+          type: integer
+        nodes_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+          description: "Map of node status to count, e.g. {\"online\": 5, \"offline\": 2}"
+
     ErrorResponse:
       type: object
       properties:
@@ -697,6 +1172,72 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AuditEvent"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    DataResponse_Node:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Node"
+
+    DataResponse_NodeGroup:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/NodeGroup"
+
+    DataResponse_SSHKey:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/SSHKey"
+
+    DataResponse_Status:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/StatusOverview"
+
+    NodeListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Node"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    NodeGroupListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeGroup"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    SSHKeyListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SSHKey"
         total:
           type: integer
         offset:

@@ -15,6 +15,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
 	"github.com/jmcleod/edgefabric/internal/config"
+	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/secrets"
@@ -71,6 +72,7 @@ func RunController(cfg *config.Config) error {
 	)
 	tenantSvc := tenant.NewService(store)
 	userSvc := user.NewService(store, authSvc)
+	fleetSvc := fleet.NewService(store, store, store, store)
 	authorizer := rbac.NewAuthorizer()
 	auditLog := audit.NewLogger(store, logger)
 
@@ -85,9 +87,11 @@ func RunController(cfg *config.Config) error {
 		TokenSvc:   tokenSvc,
 		TenantSvc:  tenantSvc,
 		UserSvc:    userSvc,
+		FleetSvc:   fleetSvc,
 		Authorizer: authorizer,
 		AuditLog:   auditLog,
 		APIKeys:    store,
+		SSHKeys:    store,
 		Health:     health,
 		Metrics:    metrics,
 		Logger:     logger,

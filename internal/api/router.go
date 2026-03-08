@@ -10,6 +10,7 @@ import (
 	v1 "github.com/jmcleod/edgefabric/internal/api/v1"
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/auth"
+	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/storage"
@@ -24,9 +25,11 @@ type Services struct {
 	TokenSvc   *auth.TokenService
 	TenantSvc  tenant.Service
 	UserSvc    user.Service
+	FleetSvc   fleet.Service
 	Authorizer rbac.Authorizer
 	AuditLog   audit.Logger
 	APIKeys    storage.APIKeyStore
+	SSHKeys    storage.SSHKeyStore
 	Health     *observability.HealthChecker
 	Metrics    *observability.Metrics
 	Logger     *slog.Logger
@@ -53,6 +56,23 @@ func NewRouter(svc Services) http.Handler {
 	auditHandler := v1.NewAuditHandler(svc.AuditLog, svc.Authorizer)
 	auditHandler.Register(mux, authMW)
 
+	// Fleet management handlers (nodes, node groups, SSH keys).
+	if svc.FleetSvc != nil {
+		nodeHandler := v1.NewNodeHandler(svc.FleetSvc, svc.Authorizer, svc.AuditLog)
+		nodeHandler.Register(mux, authMW)
+
+		nodeGroupHandler := v1.NewNodeGroupHandler(svc.FleetSvc, svc.Authorizer, svc.AuditLog)
+		nodeGroupHandler.Register(mux, authMW)
+
+		statusHandler := v1.NewStatusHandler(svc.TenantSvc, svc.UserSvc, svc.FleetSvc, svc.Authorizer)
+		statusHandler.Register(mux, authMW)
+	}
+
+	if svc.SSHKeys != nil {
+		sshKeyHandler := v1.NewSSHKeyHandler(svc.SSHKeys, svc.Authorizer, svc.AuditLog)
+		sshKeyHandler.Register(mux, authMW)
+	}
+
 	// OpenAPI spec (unauthenticated).
 	mux.HandleFunc("GET /api/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")
@@ -68,10 +88,11 @@ func NewRouter(svc Services) http.Handler {
 		mux.Handle("/", SPAHandler(svc.StaticFS))
 	}
 
-	// Apply global middleware: recover → metrics → logging.
+	// Apply global middleware: recover → request ID → metrics → logging.
 	// Order: outermost (recover) catches panics from all inner layers.
 	handler := middleware.Chain(mux,
 		middleware.Recover(svc.Logger),
+		middleware.RequestID(),
 		middleware.Metrics(svc.Metrics),
 		middleware.Logging(svc.Logger),
 	)
