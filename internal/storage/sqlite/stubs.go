@@ -12,47 +12,8 @@ import (
 	"github.com/jmcleod/edgefabric/internal/storage"
 )
 
-// --- GatewayStore stubs (Milestone 2 — deferred to node agent phase) ---
-
-func (s *SQLiteStore) CreateGateway(ctx context.Context, g *domain.Gateway) error {
-	return fmt.Errorf("GatewayStore: not implemented")
-}
-func (s *SQLiteStore) GetGateway(ctx context.Context, id domain.ID) (*domain.Gateway, error) {
-	return nil, fmt.Errorf("GatewayStore: not implemented")
-}
-func (s *SQLiteStore) ListGateways(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.Gateway, int, error) {
-	return nil, 0, fmt.Errorf("GatewayStore: not implemented")
-}
-func (s *SQLiteStore) UpdateGateway(ctx context.Context, g *domain.Gateway) error {
-	return fmt.Errorf("GatewayStore: not implemented")
-}
-func (s *SQLiteStore) DeleteGateway(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("GatewayStore: not implemented")
-}
-func (s *SQLiteStore) UpdateGatewayHeartbeat(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("GatewayStore: not implemented")
-}
-
-// --- WireGuardPeerStore stubs (Milestone 3) ---
-
-func (s *SQLiteStore) CreateWireGuardPeer(ctx context.Context, p *domain.WireGuardPeer) error {
-	return fmt.Errorf("WireGuardPeerStore: not implemented")
-}
-func (s *SQLiteStore) GetWireGuardPeer(ctx context.Context, id domain.ID) (*domain.WireGuardPeer, error) {
-	return nil, fmt.Errorf("WireGuardPeerStore: not implemented")
-}
-func (s *SQLiteStore) GetWireGuardPeerByOwner(ctx context.Context, ownerType domain.PeerOwnerType, ownerID domain.ID) (*domain.WireGuardPeer, error) {
-	return nil, fmt.Errorf("WireGuardPeerStore: not implemented")
-}
-func (s *SQLiteStore) ListWireGuardPeers(ctx context.Context, params storage.ListParams) ([]*domain.WireGuardPeer, int, error) {
-	return nil, 0, fmt.Errorf("WireGuardPeerStore: not implemented")
-}
-func (s *SQLiteStore) UpdateWireGuardPeer(ctx context.Context, p *domain.WireGuardPeer) error {
-	return fmt.Errorf("WireGuardPeerStore: not implemented")
-}
-func (s *SQLiteStore) DeleteWireGuardPeer(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("WireGuardPeerStore: not implemented")
-}
+// Gateway, WireGuardPeer, and EnrollmentToken stores are implemented in
+// gateway.go, wireguard_peer.go, and enrollment_token.go respectively.
 
 // --- IPAllocationStore stubs (Milestone 5) ---
 
@@ -196,18 +157,6 @@ func (s *SQLiteStore) ListTLSCertificates(ctx context.Context, tenantID domain.I
 }
 func (s *SQLiteStore) DeleteTLSCertificate(ctx context.Context, id domain.ID) error {
 	return fmt.Errorf("TLSCertificateStore: not implemented")
-}
-
-// --- EnrollmentTokenStore stubs (Milestone 4) ---
-
-func (s *SQLiteStore) CreateEnrollmentToken(ctx context.Context, t *domain.EnrollmentToken) error {
-	return fmt.Errorf("EnrollmentTokenStore: not implemented")
-}
-func (s *SQLiteStore) GetEnrollmentToken(ctx context.Context, token string) (*domain.EnrollmentToken, error) {
-	return nil, fmt.Errorf("EnrollmentTokenStore: not implemented")
-}
-func (s *SQLiteStore) MarkEnrollmentTokenUsed(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("EnrollmentTokenStore: not implemented")
 }
 
 // --- ProvisioningJobStore stubs ---
