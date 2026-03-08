@@ -71,7 +71,7 @@ func NewRouter(svc Services) http.Handler {
 	}
 
 	if svc.SSHKeys != nil {
-		sshKeyHandler := v1.NewSSHKeyHandler(svc.SSHKeys, svc.Authorizer, svc.AuditLog)
+		sshKeyHandler := v1.NewSSHKeyHandler(svc.SSHKeys, svc.ProvisioningSvc, svc.Authorizer, svc.AuditLog)
 		sshKeyHandler.Register(mux, authMW)
 	}
 

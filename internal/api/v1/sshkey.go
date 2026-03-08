@@ -8,6 +8,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/api/middleware"
 	"github.com/jmcleod/edgefabric/internal/audit"
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/provisioning"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/storage"
 )
@@ -15,14 +16,15 @@ import (
 // SSHKeyHandler handles SSH key CRUD endpoints.
 // SSH keys are a global resource (not tenant-scoped) — only SuperUser can create/delete.
 type SSHKeyHandler struct {
-	store      storage.SSHKeyStore
-	authorizer rbac.Authorizer
-	audit      audit.Logger
+	store        storage.SSHKeyStore
+	provisioner  provisioning.Service
+	authorizer   rbac.Authorizer
+	audit        audit.Logger
 }
 
 // NewSSHKeyHandler creates a new SSH key handler.
-func NewSSHKeyHandler(store storage.SSHKeyStore, authorizer rbac.Authorizer, audit audit.Logger) *SSHKeyHandler {
-	return &SSHKeyHandler{store: store, authorizer: authorizer, audit: audit}
+func NewSSHKeyHandler(store storage.SSHKeyStore, provisioner provisioning.Service, authorizer rbac.Authorizer, audit audit.Logger) *SSHKeyHandler {
+	return &SSHKeyHandler{store: store, provisioner: provisioner, authorizer: authorizer, audit: audit}
 }
 
 // Register mounts SSH key routes on the mux.
@@ -30,12 +32,15 @@ func (h *SSHKeyHandler) Register(mux *http.ServeMux, authMW func(http.Handler) h
 	requireCreate := middleware.RequirePermission(h.authorizer, rbac.ActionCreate, rbac.ResourceSSHKey, nil)
 	requireRead := middleware.RequirePermission(h.authorizer, rbac.ActionRead, rbac.ResourceSSHKey, nil)
 	requireList := middleware.RequirePermission(h.authorizer, rbac.ActionList, rbac.ResourceSSHKey, nil)
+	requireUpdate := middleware.RequirePermission(h.authorizer, rbac.ActionUpdate, rbac.ResourceSSHKey, nil)
 	requireDelete := middleware.RequirePermission(h.authorizer, rbac.ActionDelete, rbac.ResourceSSHKey, nil)
 
 	mux.Handle("POST /api/v1/ssh-keys", middleware.Chain(http.HandlerFunc(h.Create), authMW, requireCreate))
 	mux.Handle("GET /api/v1/ssh-keys", middleware.Chain(http.HandlerFunc(h.List), authMW, requireList))
 	mux.Handle("GET /api/v1/ssh-keys/{id}", middleware.Chain(http.HandlerFunc(h.Get), authMW, requireRead))
 	mux.Handle("DELETE /api/v1/ssh-keys/{id}", middleware.Chain(http.HandlerFunc(h.Delete), authMW, requireDelete))
+	mux.Handle("POST /api/v1/ssh-keys/{id}/rotate", middleware.Chain(http.HandlerFunc(h.Rotate), authMW, requireUpdate))
+	mux.Handle("POST /api/v1/ssh-keys/{id}/deploy", middleware.Chain(http.HandlerFunc(h.Deploy), authMW, requireUpdate))
 }
 
 // createSSHKeyRequest is the input for creating an SSH key.
@@ -166,4 +171,75 @@ func (h *SSHKeyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Rotate handles POST /api/v1/ssh-keys/{id}/rotate.
+// Generates a new key pair and updates the stored key.
+func (h *SSHKeyHandler) Rotate(w http.ResponseWriter, r *http.Request) {
+	id, err := apiutil.ParseID(r, "id")
+	if err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	if h.provisioner == nil {
+		apiutil.WriteError(w, http.StatusServiceUnavailable, "service_unavailable", "provisioning service not available")
+		return
+	}
+
+	key, err := h.provisioner.RotateSSHKey(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "SSH key not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to rotate SSH key")
+		return
+	}
+
+	claims := middleware.ClaimsFromContext(r.Context())
+	h.audit.Log(r.Context(), audit.Event{
+		UserID:   &claims.UserID,
+		Action:   "rotate",
+		Resource: "ssh_key",
+		Details:  map[string]string{"key_id": id.String(), "fingerprint": key.Fingerprint},
+		SourceIP: r.RemoteAddr,
+	})
+
+	apiutil.JSON(w, http.StatusOK, key)
+}
+
+// Deploy handles POST /api/v1/ssh-keys/{id}/deploy.
+// Pushes the current public key to all nodes using this SSH key.
+func (h *SSHKeyHandler) Deploy(w http.ResponseWriter, r *http.Request) {
+	id, err := apiutil.ParseID(r, "id")
+	if err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	if h.provisioner == nil {
+		apiutil.WriteError(w, http.StatusServiceUnavailable, "service_unavailable", "provisioning service not available")
+		return
+	}
+
+	if err := h.provisioner.DeploySSHKey(r.Context(), id); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "SSH key not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to deploy SSH key")
+		return
+	}
+
+	claims := middleware.ClaimsFromContext(r.Context())
+	h.audit.Log(r.Context(), audit.Event{
+		UserID:   &claims.UserID,
+		Action:   "deploy",
+		Resource: "ssh_key",
+		Details:  map[string]string{"key_id": id.String()},
+		SourceIP: r.RemoteAddr,
+	})
+
+	apiutil.JSON(w, http.StatusOK, map[string]string{"status": "deployed"})
 }
