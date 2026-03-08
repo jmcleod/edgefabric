@@ -8,8 +8,9 @@ info:
     audit logging, status dashboard, node provisioning lifecycle,
     enrollment, gateway management, SSH key rotation, networking
     (BGP sessions, IP allocations, WireGuard peers), DNS zone and record
-    management, and node config sync (WireGuard, BGP, DNS).
-  version: "1.4.0"
+    management, CDN site and origin management with caching reverse proxy,
+    and node config sync (WireGuard, BGP, DNS, CDN).
+  version: "1.5.0"
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -58,6 +59,10 @@ tags:
     description: DNS zone management (CRUD, serial tracking, node group assignment)
   - name: DNS Records
     description: DNS record management within zones (A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR)
+  - name: CDN Sites
+    description: CDN site management (caching reverse proxy configuration, domain routing, cache purge)
+  - name: CDN Origins
+    description: CDN origin server management (backend servers for reverse proxying)
 
 paths:
   /api/v1/auth/login:
@@ -1560,6 +1565,318 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # --- CDN Sites ---
+  /api/v1/tenants/{tenantId}/cdn/sites:
+    parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [CDN Sites]
+      summary: List CDN sites for a tenant
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of CDN sites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CDNSiteListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [CDN Sites]
+      summary: Create a CDN site
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, domains, tls_mode]
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                domains:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  description: Hostnames this site serves (matched via Host header)
+                tls_mode:
+                  $ref: "#/components/schemas/TLSMode"
+                cache_enabled:
+                  type: boolean
+                  default: false
+                cache_ttl:
+                  type: integer
+                  minimum: 0
+                  description: Cache TTL in seconds (0 = passthrough)
+                compression_enabled:
+                  type: boolean
+                  default: false
+                rate_limit_rps:
+                  type: integer
+                  minimum: 1
+                  nullable: true
+                  description: Max requests per second (null = unlimited)
+                node_group_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Node group to serve this site
+                header_rules:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/HeaderRule"
+                  description: Header manipulation rules applied to responses
+      responses:
+        "201":
+          description: CDN site created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_CDNSite"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/cdn/sites/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [CDN Sites]
+      summary: Get a CDN site by ID
+      responses:
+        "200":
+          description: CDN site details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_CDNSite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [CDN Sites]
+      summary: Update a CDN site
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                domains:
+                  type: array
+                  items:
+                    type: string
+                tls_mode:
+                  $ref: "#/components/schemas/TLSMode"
+                cache_enabled:
+                  type: boolean
+                cache_ttl:
+                  type: integer
+                compression_enabled:
+                  type: boolean
+                rate_limit_rps:
+                  type: integer
+                  nullable: true
+                node_group_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                header_rules:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/HeaderRule"
+                status:
+                  $ref: "#/components/schemas/CDNSiteStatus"
+                clear_node_group:
+                  type: boolean
+                  description: Set true to remove node group assignment
+                clear_rate_limit:
+                  type: boolean
+                  description: Set true to remove rate limit
+      responses:
+        "200":
+          description: CDN site updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_CDNSite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [CDN Sites]
+      summary: Delete a CDN site
+      description: Deletes the site and all its origins and domain mappings (CASCADE).
+      responses:
+        "204":
+          description: CDN site deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/cdn/sites/{id}/purge:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      tags: [CDN Sites]
+      summary: Purge cache for a CDN site
+      description: Signals cache invalidation for all nodes serving this site.
+      responses:
+        "204":
+          description: Cache purge initiated
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- CDN Origins ---
+  /api/v1/cdn/sites/{siteId}/origins:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [CDN Origins]
+      summary: List origins for a CDN site
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of CDN origins
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CDNOriginListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [CDN Origins]
+      summary: Create a CDN origin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, scheme]
+              properties:
+                address:
+                  type: string
+                  description: "Origin server address (host:port or hostname)"
+                scheme:
+                  $ref: "#/components/schemas/CDNOriginScheme"
+                weight:
+                  type: integer
+                  minimum: 1
+                  default: 1
+                  description: Weight for load balancing (higher = more traffic)
+                health_check_path:
+                  type: string
+                  description: "HTTP path for health checks (must start with /)"
+                health_check_interval:
+                  type: integer
+                  minimum: 5
+                  description: Health check interval in seconds
+      responses:
+        "201":
+          description: CDN origin created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_CDNOrigin"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/cdn/origins/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [CDN Origins]
+      summary: Get a CDN origin by ID
+      responses:
+        "200":
+          description: CDN origin details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_CDNOrigin"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [CDN Origins]
+      summary: Update a CDN origin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                scheme:
+                  $ref: "#/components/schemas/CDNOriginScheme"
+                weight:
+                  type: integer
+                health_check_path:
+                  type: string
+                health_check_interval:
+                  type: integer
+                status:
+                  $ref: "#/components/schemas/CDNOriginStatus"
+      responses:
+        "200":
+          description: CDN origin updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_CDNOrigin"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [CDN Origins]
+      summary: Delete a CDN origin
+      responses:
+        "204":
+          description: CDN origin deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- Node CDN Config ---
+  /api/v1/nodes/{id}/config/cdn:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Node Networking]
+      summary: Get desired CDN config for a node
+      description: Returns the desired CDN site and origin configuration for node-side reconciliation.
+      responses:
+        "200":
+          description: Desired CDN configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_NodeCDNConfig"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          description: CDN service not available
+
   /healthz:
     get:
       tags: [Infrastructure]
@@ -2492,6 +2809,185 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DNSRecord"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    # --- CDN Schemas ---
+
+    CDNSiteStatus:
+      type: string
+      enum: [active, disabled]
+
+    TLSMode:
+      type: string
+      enum: [auto, manual, disabled]
+
+    CDNOriginScheme:
+      type: string
+      enum: [http, https]
+
+    CDNOriginStatus:
+      type: string
+      enum: [healthy, unhealthy, unknown]
+
+    HeaderRule:
+      type: object
+      required: [action, header]
+      properties:
+        action:
+          type: string
+          enum: [add, set, remove]
+        header:
+          type: string
+          description: HTTP header name
+        value:
+          type: string
+          description: Header value (required for add/set, optional for remove)
+
+    CDNSite:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        domains:
+          type: array
+          items:
+            type: string
+          description: Hostnames this site serves
+        tls_mode:
+          $ref: "#/components/schemas/TLSMode"
+        tls_cert_id:
+          type: string
+          format: uuid
+          nullable: true
+        cache_enabled:
+          type: boolean
+        cache_ttl:
+          type: integer
+          description: Cache TTL in seconds
+        compression_enabled:
+          type: boolean
+        rate_limit_rps:
+          type: integer
+          nullable: true
+        node_group_id:
+          type: string
+          format: uuid
+          nullable: true
+        header_rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeaderRule"
+          nullable: true
+        status:
+          $ref: "#/components/schemas/CDNSiteStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CDNOrigin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        site_id:
+          type: string
+          format: uuid
+        address:
+          type: string
+          description: "Origin server address (host:port)"
+        scheme:
+          $ref: "#/components/schemas/CDNOriginScheme"
+        weight:
+          type: integer
+          description: Load balancing weight
+        health_check_path:
+          type: string
+        health_check_interval:
+          type: integer
+          nullable: true
+          description: Health check interval in seconds
+        status:
+          $ref: "#/components/schemas/CDNOriginStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SiteWithOrigins:
+      type: object
+      properties:
+        site:
+          $ref: "#/components/schemas/CDNSite"
+        origins:
+          type: array
+          items:
+            $ref: "#/components/schemas/CDNOrigin"
+
+    NodeCDNConfig:
+      type: object
+      description: Full CDN configuration snapshot for a node (polled every 30s).
+      properties:
+        sites:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiteWithOrigins"
+
+    DataResponse_CDNSite:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/CDNSite"
+
+    DataResponse_CDNOrigin:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/CDNOrigin"
+
+    DataResponse_NodeCDNConfig:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/NodeCDNConfig"
+
+    CDNSiteListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CDNSite"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    CDNOriginListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CDNOrigin"
         total:
           type: integer
         offset:

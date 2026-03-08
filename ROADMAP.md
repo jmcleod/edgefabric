@@ -124,19 +124,22 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 ### Milestone 7: CDN
 **Goal**: Nodes act as caching reverse proxies for tenant sites.
 
-- [ ] CDN site configuration API
-- [ ] Origin management API
-- [ ] Reverse proxy with httputil.ReverseProxy
-- [ ] Disk-based response cache
-- [ ] Cache key generation
-- [ ] Cache TTL and invalidation
-- [ ] Cache purge API
-- [ ] TLS termination (auto-cert or manual)
-- [ ] Origin health checks
-- [ ] Header manipulation (add/remove/rewrite)
-- [ ] Compression (gzip, brotli)
-- [ ] Rate limiting per-site
-- [ ] CDN config sync from controller to nodes
+- [x] CDN site configuration API
+- [x] Origin management API
+- [x] Reverse proxy with httputil.ReverseProxy
+- [x] In-memory LRU response cache (disk-based deferred to v2)
+- [x] Cache key generation
+- [x] Cache TTL and invalidation
+- [x] Cache purge API
+- [ ] TLS termination (auto-cert or manual) — TLS mode stored/synced, auto-cert deferred to v2
+- [x] Origin health checks
+- [x] Header manipulation (add/set/remove)
+- [x] Compression (gzip) — brotli deferred to v2
+- [x] Rate limiting per-site
+- [x] CDN config sync from controller to nodes
+- [x] Domain-based routing (Host header matching)
+- [x] Weighted origin selection
+- [x] Node-side noop CDN service for demo mode
 
 ---
 
@@ -184,7 +187,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 
 ## Current Status
 
-**Active Milestone**: 6 (Anycast DNS) — Milestones 0–5 are substantially complete (see items above for remaining work).
+**Active Milestone**: 8 (Route/Gateway) — Milestones 0–7 are substantially complete (see items above for remaining work).
 
 ## Priority Order
 
