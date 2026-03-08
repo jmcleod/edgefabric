@@ -158,16 +158,26 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 
 ---
 
-### Milestone 9: Observability & Audit
-**Goal**: Production-grade operational visibility.
+### Milestone 9: Observability & Hardening
+**Goal**: Production-grade operational visibility and security hardening.
 
-- [ ] Prometheus metrics for all services
-- [ ] Structured logging throughout
-- [ ] Audit log API (query, filter, export)
-- [ ] Alerting hooks (webhook-based)
-- [ ] Node health dashboard data
-- [ ] Per-tenant usage metrics
-- [ ] Log aggregation guidance
+- [x] Prometheus metrics for all services (system gauges, service-level counters, HTTP request metrics)
+- [x] Health/readiness/liveness endpoints for controller, node, and gateway
+- [x] Audit trail completeness (failed logins, TOTP enrollment/failure)
+- [x] Security headers middleware (CSP, X-Frame-Options, X-Content-Type-Options)
+- [x] Config validation (encryption key format, service modes, WireGuard IPs)
+- [x] Error model cleanup (HandleServiceError, ErrValidation)
+- [x] Status endpoint with full resource counts and build info
+- [x] Event notification scaffolding (in-process event bus)
+- [x] Schema versioning for SQLite migrations
+- [x] Token signing key separation from encryption key
+- [x] Security model documentation
+- [x] Operations documentation (backup/restore, upgrades, monitoring)
+- [ ] Rate limiting on auth endpoints (v2)
+- [ ] Key rotation with versioned key IDs (v2)
+- [ ] Event bus webhook/Slack/email handlers (v2)
+- [ ] ICMP raw socket forwarding (v2)
+- [ ] Per-tenant usage metrics (v2)
 
 ---
 
@@ -187,7 +197,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 
 ## Current Status
 
-**Active Milestone**: 9 (Observability & Audit) — Milestones 0–8 are substantially complete (see items above for remaining work).
+**Active Milestone**: 10 (Packaging & Demo) — Milestones 0–9 are substantially complete (see items above for remaining work).
 
 ## Priority Order
 
