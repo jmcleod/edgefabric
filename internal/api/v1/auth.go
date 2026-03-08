@@ -74,6 +74,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	u, err := h.authSvc.AuthenticatePassword(r.Context(), req.Email, req.Password)
 	if err != nil {
+		// Audit failed login attempt. Don't include UserID/TenantID to avoid
+		// revealing whether the account exists.
+		h.audit.Log(r.Context(), audit.Event{
+			Action:   "login_failed",
+			Resource: "session",
+			Details:  map[string]string{"email": req.Email},
+			SourceIP: r.RemoteAddr,
+		})
 		// Don't leak whether the email exists — always "invalid credentials".
 		apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid credentials")
 		return
@@ -138,6 +146,13 @@ func (h *AuthHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.authSvc.AuthenticateTOTP(r.Context(), claims.UserID, req.Code); err != nil {
+		h.audit.Log(r.Context(), audit.Event{
+			TenantID: claims.TenantID,
+			UserID:   &claims.UserID,
+			Action:   "totp_verify_failed",
+			Resource: "session",
+			SourceIP: r.RemoteAddr,
+		})
 		apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid TOTP code")
 		return
 	}
@@ -179,6 +194,14 @@ func (h *AuthHandler) EnrollTOTP(w http.ResponseWriter, r *http.Request) {
 		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to enroll TOTP")
 		return
 	}
+
+	h.audit.Log(r.Context(), audit.Event{
+		TenantID: claims.TenantID,
+		UserID:   &claims.UserID,
+		Action:   "totp_enroll",
+		Resource: "user",
+		SourceIP: r.RemoteAddr,
+	})
 
 	apiutil.JSON(w, http.StatusOK, totpEnrollResponse{Secret: secret, ProvisioningURI: uri})
 }
