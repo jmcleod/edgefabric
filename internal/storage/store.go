@@ -185,6 +185,7 @@ type RouteStore interface {
 	CreateRoute(ctx context.Context, r *domain.Route) error
 	GetRoute(ctx context.Context, id domain.ID) (*domain.Route, error)
 	ListRoutes(ctx context.Context, tenantID domain.ID, params ListParams) ([]*domain.Route, int, error)
+	ListRoutesByGateway(ctx context.Context, gatewayID domain.ID) ([]*domain.Route, error)
 	UpdateRoute(ctx context.Context, r *domain.Route) error
 	DeleteRoute(ctx context.Context, id domain.ID) error
 }

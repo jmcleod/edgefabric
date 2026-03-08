@@ -24,23 +24,7 @@ import (
 // CDNSiteStore and CDNOriginStore are implemented in
 // cdn_site.go and cdn_origin.go respectively.
 
-// --- RouteStore stubs (Milestone 8) ---
-
-func (s *SQLiteStore) CreateRoute(ctx context.Context, r *domain.Route) error {
-	return fmt.Errorf("RouteStore: not implemented")
-}
-func (s *SQLiteStore) GetRoute(ctx context.Context, id domain.ID) (*domain.Route, error) {
-	return nil, fmt.Errorf("RouteStore: not implemented")
-}
-func (s *SQLiteStore) ListRoutes(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.Route, int, error) {
-	return nil, 0, fmt.Errorf("RouteStore: not implemented")
-}
-func (s *SQLiteStore) UpdateRoute(ctx context.Context, r *domain.Route) error {
-	return fmt.Errorf("RouteStore: not implemented")
-}
-func (s *SQLiteStore) DeleteRoute(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("RouteStore: not implemented")
-}
+// RouteStore is implemented in route.go.
 
 // --- TLSCertificateStore stubs (Milestone 7) ---
 
