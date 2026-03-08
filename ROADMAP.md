@@ -105,13 +105,19 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 ### Milestone 6: Anycast DNS
 **Goal**: Nodes serve authoritative DNS for tenant zones.
 
-- [ ] DNS zone CRUD API on controller
-- [ ] DNS record CRUD API
-- [ ] Zone data sync from controller to nodes
-- [ ] Authoritative DNS server on nodes (miekg/dns)
-- [ ] SOA serial management
-- [ ] Zone transfer/sync protocol (push-based over WireGuard)
+- [x] DNS zone CRUD API on controller
+- [x] DNS record CRUD API (A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR)
+- [x] Type-specific record validation + CNAME exclusivity enforcement
+- [x] Zone serial auto-management (increment on every record mutation)
+- [x] Zone-to-node assignment via NodeGroups
+- [x] Zone data sync from controller to nodes (polling-based, GET /nodes/{id}/config/dns)
+- [x] Authoritative DNS server on nodes (miekg/dns) — UDP + TCP
+- [x] SOA auto-generation from zone metadata
+- [x] Noop DNS service for demo/test mode
+- [x] Node DNS config, startup, and 30-second reconciliation loop
+- [x] NXDOMAIN for unknown names, REFUSED for unserved zones
 - [ ] DNS query logging
+- [ ] Zone transfer/AXFR protocol
 
 ---
 

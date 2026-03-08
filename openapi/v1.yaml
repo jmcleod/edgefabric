@@ -7,8 +7,9 @@ info:
     API key management, fleet management (nodes, node groups, SSH keys),
     audit logging, status dashboard, node provisioning lifecycle,
     enrollment, gateway management, SSH key rotation, networking
-    (BGP sessions, IP allocations, WireGuard peers), and node config sync.
-  version: "1.3.0"
+    (BGP sessions, IP allocations, WireGuard peers), DNS zone and record
+    management, and node config sync (WireGuard, BGP, DNS).
+  version: "1.4.0"
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -53,6 +54,10 @@ tags:
     description: WireGuard peer listing (SuperUser only)
   - name: Node Networking
     description: Node networking state and config sync
+  - name: DNS Zones
+    description: DNS zone management (CRUD, serial tracking, node group assignment)
+  - name: DNS Records
+    description: DNS record management within zones (A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR)
 
 paths:
   /api/v1/auth/login:
@@ -1296,6 +1301,265 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # --- Node DNS Config ---
+  /api/v1/nodes/{id}/config/dns:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Node Networking]
+      summary: Get desired DNS config for a node
+      description: Returns the desired DNS zone and record configuration for node-side reconciliation.
+      responses:
+        "200":
+          description: Desired DNS configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_NodeDNSConfig"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          description: DNS service not available
+
+  # --- DNS Zones ---
+  /api/v1/tenants/{tenantId}/dns/zones:
+    parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [DNS Zones]
+      summary: List DNS zones for a tenant
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of DNS zones
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DNSZoneListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [DNS Zones]
+      summary: Create a DNS zone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: Zone name (FQDN, e.g. "example.com")
+                ttl:
+                  type: integer
+                  description: Default TTL for records in this zone
+                node_group_id:
+                  type: string
+                  format: uuid
+                  description: Assign zone to a node group for serving
+      responses:
+        "201":
+          description: DNS zone created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_DNSZone"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/dns/zones/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [DNS Zones]
+      summary: Get a DNS zone by ID
+      responses:
+        "200":
+          description: DNS zone details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_DNSZone"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [DNS Zones]
+      summary: Update a DNS zone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  $ref: "#/components/schemas/DNSZoneStatus"
+                ttl:
+                  type: integer
+                node_group_id:
+                  type: string
+                  format: uuid
+                clear_node_group:
+                  type: boolean
+                  description: Set true to remove node group assignment
+      responses:
+        "200":
+          description: DNS zone updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_DNSZone"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [DNS Zones]
+      summary: Delete a DNS zone
+      description: Deletes the zone and all its records (CASCADE).
+      responses:
+        "204":
+          description: DNS zone deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- DNS Records ---
+  /api/v1/dns/zones/{zoneId}/records:
+    parameters:
+      - name: zoneId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [DNS Records]
+      summary: List DNS records in a zone
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of DNS records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DNSRecordListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [DNS Records]
+      summary: Create a DNS record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type, value]
+              properties:
+                name:
+                  type: string
+                  description: Record name (e.g. "www", "@" for apex)
+                type:
+                  $ref: "#/components/schemas/DNSRecordType"
+                value:
+                  type: string
+                  description: Record value (IP for A/AAAA, hostname for CNAME/MX/NS, etc.)
+                ttl:
+                  type: integer
+                  description: Override zone default TTL for this record
+                priority:
+                  type: integer
+                  description: Required for MX and SRV records
+                weight:
+                  type: integer
+                  description: Required for SRV records
+                port:
+                  type: integer
+                  description: Required for SRV records
+      responses:
+        "201":
+          description: DNS record created (zone serial incremented)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_DNSRecord"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/dns/records/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [DNS Records]
+      summary: Get a DNS record by ID
+      responses:
+        "200":
+          description: DNS record details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_DNSRecord"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [DNS Records]
+      summary: Update a DNS record
+      description: Updates the record and increments the parent zone's serial.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  $ref: "#/components/schemas/DNSRecordType"
+                value:
+                  type: string
+                ttl:
+                  type: integer
+                priority:
+                  type: integer
+                weight:
+                  type: integer
+                port:
+                  type: integer
+      responses:
+        "200":
+          description: DNS record updated (zone serial incremented)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_DNSRecord"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [DNS Records]
+      summary: Delete a DNS record
+      description: Deletes the record and increments the parent zone's serial.
+      responses:
+        "204":
+          description: DNS record deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /healthz:
     get:
       tags: [Infrastructure]
@@ -2083,6 +2347,151 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WireGuardPeer"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    # --- DNS Schemas ---
+
+    DNSZoneStatus:
+      type: string
+      enum: [active, disabled]
+
+    DNSRecordType:
+      type: string
+      enum: [A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR]
+
+    DNSZone:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Zone FQDN (e.g. "example.com")
+        status:
+          $ref: "#/components/schemas/DNSZoneStatus"
+        serial:
+          type: integer
+          description: Auto-incremented on every zone/record mutation
+        ttl:
+          type: integer
+          description: Default TTL for records in this zone
+        node_group_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Node group assigned to serve this zone
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DNSRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        zone_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Record name (e.g. "www", "@" for apex)
+        type:
+          $ref: "#/components/schemas/DNSRecordType"
+        value:
+          type: string
+        ttl:
+          type: integer
+          nullable: true
+        priority:
+          type: integer
+          nullable: true
+          description: Required for MX and SRV records
+        weight:
+          type: integer
+          nullable: true
+          description: Used by SRV records
+        port:
+          type: integer
+          nullable: true
+          description: Used by SRV records
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ZoneWithRecords:
+      type: object
+      properties:
+        zone:
+          $ref: "#/components/schemas/DNSZone"
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/DNSRecord"
+
+    NodeDNSConfig:
+      type: object
+      description: Full DNS configuration snapshot for a node (polled every 30s).
+      properties:
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoneWithRecords"
+
+    DataResponse_DNSZone:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/DNSZone"
+
+    DataResponse_DNSRecord:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/DNSRecord"
+
+    DataResponse_NodeDNSConfig:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/NodeDNSConfig"
+
+    DNSZoneListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DNSZone"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    DNSRecordListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DNSRecord"
         total:
           type: integer
         offset:
