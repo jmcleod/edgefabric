@@ -5,8 +5,9 @@ info:
     REST API for the EdgeFabric distributed edge networking platform.
     Provides multi-tenant management, user authentication (password + TOTP 2FA),
     API key management, fleet management (nodes, node groups, SSH keys),
-    audit logging, and status dashboard.
-  version: "1.1.0"
+    audit logging, status dashboard, node provisioning lifecycle,
+    enrollment, gateway management, and SSH key rotation.
+  version: "1.2.0"
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -35,6 +36,12 @@ tags:
     description: Programmatic access credential management
   - name: Audit
     description: Immutable audit event log
+  - name: Provisioning
+    description: Node lifecycle actions (enroll, start, stop, restart, upgrade, reprovision, decommission)
+  - name: Enrollment
+    description: Unauthenticated node enrollment via bootstrap token
+  - name: Gateways
+    description: Gateway CRUD and heartbeat management
   - name: Status
     description: Fleet dashboard and status overview
 
@@ -741,6 +748,234 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/ssh-keys/{id}/rotate:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      tags: [SSH Keys]
+      summary: Rotate an SSH key
+      description: Generates a new Ed25519 key pair, encrypts the private key at rest, and updates the stored key.
+      responses:
+        "200":
+          description: Key rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_SSHKey"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/ssh-keys/{id}/deploy:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      tags: [SSH Keys]
+      summary: Deploy SSH key to nodes
+      description: Appends the current public key to authorized_keys on all online nodes using this key.
+      responses:
+        "200":
+          description: Key deployed to nodes
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/nodes/{id}/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+      - name: action
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [enroll, start, stop, restart, upgrade, reprovision, decommission]
+    post:
+      tags: [Provisioning]
+      summary: Trigger a provisioning action on a node
+      description: |
+        Creates a ProvisioningJob and runs the action pipeline asynchronously.
+        Returns the job immediately with status "pending".
+      responses:
+        "202":
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_ProvisioningJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Invalid state transition or concurrent job
+
+  /api/v1/nodes/{id}/jobs:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Provisioning]
+      summary: List provisioning jobs for a node
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of provisioning jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisioningJobListResponse"
+
+  /api/v1/provisioning/jobs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Provisioning]
+      summary: Get a provisioning job by ID
+      responses:
+        "200":
+          description: Provisioning job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_ProvisioningJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/enroll:
+    post:
+      tags: [Enrollment]
+      summary: Complete node enrollment
+      description: |
+        Unauthenticated endpoint. The node agent calls this with a bootstrap
+        token after SSH-push deployment. The token serves as authentication.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: Bootstrap enrollment token
+      responses:
+        "200":
+          description: Node enrolled
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Invalid enrollment token
+        "409":
+          description: Token already used
+
+  /api/v1/gateways:
+    get:
+      tags: [Gateways]
+      summary: List gateways
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of gateways
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayListResponse"
+    post:
+      tags: [Gateways]
+      summary: Create a gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                tenant_id:
+                  type: string
+                  format: uuid
+                public_ip:
+                  type: string
+                region:
+                  type: string
+      responses:
+        "201":
+          description: Gateway created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Gateway"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Gateway already exists
+
+  /api/v1/gateways/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Gateways]
+      summary: Get a gateway by ID
+      responses:
+        "200":
+          description: Gateway details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Gateway"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Gateways]
+      summary: Update a gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                public_ip:
+                  type: string
+                region:
+                  type: string
+      responses:
+        "200":
+          description: Gateway updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_Gateway"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Gateways]
+      summary: Delete a gateway
+      responses:
+        "204":
+          description: Gateway deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/gateways/{id}/heartbeat:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      tags: [Gateways]
+      summary: Record a gateway heartbeat
+      responses:
+        "200":
+          description: Heartbeat recorded
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/status:
     get:
       tags: [Status]
@@ -1039,6 +1274,104 @@ components:
           type: string
           format: date-time
 
+    ProvisioningAction:
+      type: string
+      enum: [enroll, start, stop, restart, upgrade, reprovision, decommission]
+
+    ProvisioningStatus:
+      type: string
+      enum: [pending, running, completed, failed]
+
+    ProvisioningJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        node_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          $ref: "#/components/schemas/ProvisioningAction"
+        status:
+          $ref: "#/components/schemas/ProvisioningStatus"
+        current_step:
+          type: string
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              step:
+                type: string
+              status:
+                type: string
+              started_at:
+                type: string
+                format: date-time
+              duration_ms:
+                type: integer
+              output:
+                type: string
+              error:
+                type: string
+        error:
+          type: string
+          nullable: true
+        initiated_by:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Gateway:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        public_ip:
+          type: string
+        wireguard_ip:
+          type: string
+        status:
+          type: string
+          enum: [pending, online, offline, error]
+        region:
+          type: string
+        last_heartbeat:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
     StatusOverview:
       type: object
       properties:
@@ -1224,6 +1557,46 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/NodeGroup"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    DataResponse_ProvisioningJob:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/ProvisioningJob"
+
+    DataResponse_Gateway:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Gateway"
+
+    ProvisioningJobListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProvisioningJob"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    GatewayListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Gateway"
         total:
           type: integer
         offset:

@@ -52,26 +52,26 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 ### Milestone 2: Fleet Management
 **Goal**: Controller can manage inventory of nodes and gateways.
 
-- [ ] Node CRUD API
-- [ ] Gateway CRUD API
-- [ ] Node group management
+- [x] Node CRUD API
+- [x] Gateway CRUD API
+- [x] Node group management
 - [ ] IP allocation management
-- [ ] SSH key storage and management
-- [ ] Node/Gateway assignment to tenants
-- [ ] Health/heartbeat tracking
-- [ ] Fleet status dashboard API
+- [x] SSH key storage and management
+- [x] Node/Gateway assignment to tenants
+- [x] Health/heartbeat tracking
+- [x] Fleet status dashboard API
 
 ---
 
 ### Milestone 3: WireGuard Overlay
 **Goal**: Controller can generate WireGuard configs, nodes/gateways can connect.
 
-- [ ] WireGuard key generation (controller-side)
-- [ ] WireGuard peer configuration management
-- [ ] Overlay IP allocation (10.100.0.0/16 default)
+- [x] WireGuard key generation (controller-side)
+- [x] WireGuard peer configuration management
+- [x] Overlay IP allocation (10.100.0.0/16 default)
 - [ ] WireGuard interface setup on node/gateway
 - [ ] Hub-spoke topology: controller is hub
-- [ ] Key rotation API
+- [x] Key rotation API
 - [ ] Connectivity health checks over overlay
 
 ---
@@ -79,12 +79,12 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 ### Milestone 4: Provisioning
 **Goal**: Controller can deploy the binary and config to nodes over SSH.
 
-- [ ] SSH client with key auth
-- [ ] Binary upload via SCP/SFTP
-- [ ] Config generation and push
-- [ ] systemd unit generation and installation
-- [ ] Enrollment token generation and validation
-- [ ] Node bootstrap flow (enroll → configure → start)
+- [x] SSH client with key auth
+- [x] Binary upload via SCP/SFTP
+- [x] Config generation and push
+- [x] systemd unit generation and installation
+- [x] Enrollment token generation and validation
+- [x] Node bootstrap flow (enroll → configure → start)
 - [ ] Binary version tracking per node
 - [ ] Rolling update support
 
@@ -178,7 +178,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 
 ## Current Status
 
-**Active Milestone**: 2 (Fleet Management) — Milestones 0 and 1 are complete.
+**Active Milestone**: 5 (BGP) — Milestones 0–4 are substantially complete (see items above for remaining work).
 
 ## Priority Order
 

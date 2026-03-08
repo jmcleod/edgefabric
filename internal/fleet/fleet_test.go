@@ -180,6 +180,50 @@ func TestCreateNodeGroup(t *testing.T) {
 	}
 }
 
+func TestNodeTenantAssignment(t *testing.T) {
+	svc, store := newTestService(t)
+	ctx := context.Background()
+
+	// Create a node without a tenant.
+	n, err := svc.CreateNode(ctx, fleet.CreateNodeRequest{
+		Name: "unassigned", Hostname: "unassigned.example.com", PublicIP: "10.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	if n.TenantID != nil {
+		t.Error("expected no tenant_id on creation")
+	}
+
+	// Create a tenant and assign.
+	tenant := &domain.Tenant{ID: domain.NewID(), Name: "Acme", Slug: "acme"}
+	if err := store.CreateTenant(ctx, tenant); err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
+
+	updated, err := svc.UpdateNode(ctx, n.ID, fleet.UpdateNodeRequest{
+		TenantID: &tenant.ID,
+	})
+	if err != nil {
+		t.Fatalf("assign tenant: %v", err)
+	}
+	if updated.TenantID == nil || *updated.TenantID != tenant.ID {
+		t.Error("expected tenant_id to be assigned")
+	}
+
+	// Verify tenant-scoped list.
+	nodes, total, err := svc.ListNodes(ctx, &tenant.ID, storage.ListParams{Offset: 0, Limit: 10})
+	if err != nil {
+		t.Fatalf("list nodes: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("expected 1 node in tenant, got %d", total)
+	}
+	if len(nodes) != 1 || nodes[0].ID != n.ID {
+		t.Error("expected the assigned node in tenant list")
+	}
+}
+
 func TestAddRemoveNodeFromGroup(t *testing.T) {
 	svc, store := newTestService(t)
 	ctx := context.Background()
