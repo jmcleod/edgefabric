@@ -6,8 +6,9 @@ info:
     Provides multi-tenant management, user authentication (password + TOTP 2FA),
     API key management, fleet management (nodes, node groups, SSH keys),
     audit logging, status dashboard, node provisioning lifecycle,
-    enrollment, gateway management, and SSH key rotation.
-  version: "1.2.0"
+    enrollment, gateway management, SSH key rotation, networking
+    (BGP sessions, IP allocations, WireGuard peers), and node config sync.
+  version: "1.3.0"
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -44,6 +45,14 @@ tags:
     description: Gateway CRUD and heartbeat management
   - name: Status
     description: Fleet dashboard and status overview
+  - name: BGP Sessions
+    description: BGP session management for nodes
+  - name: IP Allocations
+    description: IP prefix allocation management for tenants
+  - name: WireGuard
+    description: WireGuard peer listing (SuperUser only)
+  - name: Node Networking
+    description: Node networking state and config sync
 
 paths:
   /api/v1/auth/login:
@@ -996,6 +1005,297 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  # --- BGP Sessions ---
+  /api/v1/nodes/{nodeId}/bgp-sessions:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [BGP Sessions]
+      summary: List BGP sessions for a node
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of BGP sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BGPSessionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [BGP Sessions]
+      summary: Create a BGP session for a node
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [peer_asn, peer_address, local_asn]
+              properties:
+                peer_asn:
+                  type: integer
+                  minimum: 1
+                peer_address:
+                  type: string
+                  format: ipv4
+                local_asn:
+                  type: integer
+                  minimum: 1
+                announced_prefixes:
+                  type: array
+                  items:
+                    type: string
+                  description: CIDR prefixes to announce via this session
+      responses:
+        "201":
+          description: BGP session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_BGPSession"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/bgp-sessions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [BGP Sessions]
+      summary: Get a BGP session by ID
+      responses:
+        "200":
+          description: BGP session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_BGPSession"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [BGP Sessions]
+      summary: Update a BGP session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                peer_asn:
+                  type: integer
+                peer_address:
+                  type: string
+                local_asn:
+                  type: integer
+                status:
+                  $ref: "#/components/schemas/BGPSessionStatus"
+                announced_prefixes:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: BGP session updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_BGPSession"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [BGP Sessions]
+      summary: Delete a BGP session
+      responses:
+        "204":
+          description: BGP session deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- IP Allocations ---
+  /api/v1/tenants/{tenantId}/ip-allocations:
+    parameters:
+      - name: tenantId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [IP Allocations]
+      summary: List IP allocations for a tenant
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of IP allocations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IPAllocationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [IP Allocations]
+      summary: Create an IP allocation for a tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prefix, type, purpose]
+              properties:
+                prefix:
+                  type: string
+                  description: CIDR prefix (e.g. "203.0.113.0/24")
+                type:
+                  $ref: "#/components/schemas/IPAllocationType"
+                purpose:
+                  $ref: "#/components/schemas/IPAllocationPurpose"
+      responses:
+        "201":
+          description: IP allocation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_IPAllocation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/ip-allocations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [IP Allocations]
+      summary: Get an IP allocation by ID
+      responses:
+        "200":
+          description: IP allocation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_IPAllocation"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [IP Allocations]
+      summary: Update an IP allocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: "#/components/schemas/IPAllocationStatusEnum"
+                purpose:
+                  $ref: "#/components/schemas/IPAllocationPurpose"
+      responses:
+        "200":
+          description: IP allocation updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_IPAllocation"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [IP Allocations]
+      summary: Delete an IP allocation
+      responses:
+        "204":
+          description: IP allocation deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- WireGuard ---
+  /api/v1/wireguard/peers:
+    get:
+      tags: [WireGuard]
+      summary: List all WireGuard peers (SuperUser only)
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of WireGuard peers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WireGuardPeerListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # --- Node Networking ---
+  /api/v1/nodes/{id}/networking:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Node Networking]
+      summary: Get aggregated networking state for a node
+      description: |
+        Returns the node's WireGuard IP, WireGuard peer record,
+        and all configured BGP sessions.
+      responses:
+        "200":
+          description: Node networking state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataResponse_NodeNetworkingState"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/nodes/{id}/config/wireguard:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Node Networking]
+      summary: Get WireGuard config for a node
+      description: Returns the node's wg0.conf content as text/plain.
+      responses:
+        "200":
+          description: WireGuard configuration file
+          content:
+            text/plain:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/nodes/{id}/config/bgp:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [Node Networking]
+      summary: Get desired BGP sessions for a node
+      description: Returns the desired BGP session configuration for node-side reconciliation.
+      responses:
+        "200":
+          description: Desired BGP sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BGPSessionListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /healthz:
     get:
       tags: [Infrastructure]
@@ -1611,6 +1911,178 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SSHKey"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    # --- Networking Schemas ---
+
+    BGPSessionStatus:
+      type: string
+      enum: [configured, active, down, removed]
+
+    IPAllocationType:
+      type: string
+      enum: [anycast, unicast]
+
+    IPAllocationPurpose:
+      type: string
+      enum: [dns, cdn, route]
+
+    IPAllocationStatusEnum:
+      type: string
+      enum: [active, withdrawn, pending]
+
+    BGPSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        node_id:
+          type: string
+          format: uuid
+        peer_asn:
+          type: integer
+        peer_address:
+          type: string
+        local_asn:
+          type: integer
+        status:
+          $ref: "#/components/schemas/BGPSessionStatus"
+        announced_prefixes:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    IPAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        prefix:
+          type: string
+        type:
+          $ref: "#/components/schemas/IPAllocationType"
+        purpose:
+          $ref: "#/components/schemas/IPAllocationPurpose"
+        status:
+          $ref: "#/components/schemas/IPAllocationStatusEnum"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WireGuardPeer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        owner_type:
+          type: string
+          enum: [node, gateway, controller]
+        owner_id:
+          type: string
+          format: uuid
+        public_key:
+          type: string
+        allowed_ips:
+          type: array
+          items:
+            type: string
+        endpoint:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    NodeNetworkingState:
+      type: object
+      properties:
+        node_id:
+          type: string
+          format: uuid
+        wireguard_ip:
+          type: string
+        wireguard_peer:
+          $ref: "#/components/schemas/WireGuardPeer"
+        bgp_sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/BGPSession"
+
+    DataResponse_BGPSession:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/BGPSession"
+
+    DataResponse_IPAllocation:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/IPAllocation"
+
+    DataResponse_NodeNetworkingState:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/NodeNetworkingState"
+
+    BGPSessionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BGPSession"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    IPAllocationListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/IPAllocation"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    WireGuardPeerListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/WireGuardPeer"
         total:
           type: integer
         offset:

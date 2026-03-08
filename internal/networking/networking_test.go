@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/secrets"
@@ -31,13 +30,7 @@ func newTestEnv(t *testing.T) (networking.Service, *sqlite.SQLiteStore, *secrets
 		t.Fatalf("create secrets: %v", err)
 	}
 
-	wgCfg := config.WireGuardHub{
-		ListenPort: 51820,
-		Subnet:     "10.100.0.0/16",
-		Address:    "10.100.0.1/16",
-	}
-
-	svc := networking.NewService(store, store, store, store, sec, wgCfg)
+	svc := networking.NewService(store, store, store, store, sec, testWGConfig)
 	return svc, store, sec
 }
 

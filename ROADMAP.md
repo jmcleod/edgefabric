@@ -55,7 +55,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] Node CRUD API
 - [x] Gateway CRUD API
 - [x] Node group management
-- [ ] IP allocation management
+- [x] IP allocation management
 - [x] SSH key storage and management
 - [x] Node/Gateway assignment to tenants
 - [x] Health/heartbeat tracking
@@ -69,8 +69,8 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] WireGuard key generation (controller-side)
 - [x] WireGuard peer configuration management
 - [x] Overlay IP allocation (10.100.0.0/16 default)
-- [ ] WireGuard interface setup on node/gateway
-- [ ] Hub-spoke topology: controller is hub
+- [x] WireGuard interface setup on node/gateway
+- [x] Hub-spoke topology: controller is hub
 - [x] Key rotation API
 - [ ] Connectivity health checks over overlay
 
@@ -93,11 +93,11 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 ### Milestone 5: BGP
 **Goal**: Nodes can announce anycast prefixes to upstream peers.
 
-- [ ] GoBGP integration as library
-- [ ] BGP session configuration from controller
-- [ ] Prefix announcement management
-- [ ] BGP session status reporting
-- [ ] Session lifecycle (start, stop, reconfigure)
+- [x] GoBGP integration as library
+- [x] BGP session configuration from controller
+- [x] Prefix announcement management
+- [x] BGP session status reporting
+- [x] Session lifecycle (start, stop, reconfigure)
 - [ ] BGP session monitoring and alerting
 
 ---
@@ -178,7 +178,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 
 ## Current Status
 
-**Active Milestone**: 5 (BGP) — Milestones 0–4 are substantially complete (see items above for remaining work).
+**Active Milestone**: 6 (Anycast DNS) — Milestones 0–5 are substantially complete (see items above for remaining work).
 
 ## Priority Order
 

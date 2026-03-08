@@ -64,9 +64,18 @@ type SecretsConfig struct {
 
 // NodeConfig holds node-specific settings.
 type NodeConfig struct {
-	ControllerAddr string `yaml:"controller_addr"`
-	EnrollmentToken string `yaml:"enrollment_token,omitempty"`
-	DataDir        string `yaml:"data_dir"`
+	ControllerAddr  string    `yaml:"controller_addr"`
+	EnrollmentToken string    `yaml:"enrollment_token,omitempty"`
+	DataDir         string    `yaml:"data_dir"`
+	BGP             BGPConfig `yaml:"bgp,omitempty"`
+}
+
+// BGPConfig holds BGP runtime settings for a node.
+type BGPConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	RouterID string `yaml:"router_id,omitempty"` // If empty, uses node's WireGuard IP.
+	LocalASN uint32 `yaml:"local_asn,omitempty"`
+	Mode     string `yaml:"mode,omitempty"` // "gobgp" or "noop", defaults to "noop"
 }
 
 // GatewayConfig holds gateway-specific settings.
