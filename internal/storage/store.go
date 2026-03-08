@@ -31,6 +31,7 @@ type Store interface {
 	TLSCertificateStore
 	AuditEventStore
 	EnrollmentTokenStore
+	ProvisioningJobStore
 
 	// Migrate runs database migrations to ensure the schema is current.
 	Migrate(ctx context.Context) error
@@ -193,6 +194,7 @@ type SSHKeyStore interface {
 	CreateSSHKey(ctx context.Context, k *domain.SSHKey) error
 	GetSSHKey(ctx context.Context, id domain.ID) (*domain.SSHKey, error)
 	ListSSHKeys(ctx context.Context, params ListParams) ([]*domain.SSHKey, int, error)
+	UpdateSSHKey(ctx context.Context, k *domain.SSHKey) error
 	DeleteSSHKey(ctx context.Context, id domain.ID) error
 }
 
@@ -215,4 +217,14 @@ type EnrollmentTokenStore interface {
 	CreateEnrollmentToken(ctx context.Context, t *domain.EnrollmentToken) error
 	GetEnrollmentToken(ctx context.Context, token string) (*domain.EnrollmentToken, error)
 	MarkEnrollmentTokenUsed(ctx context.Context, id domain.ID) error
+}
+
+// ProvisioningJobStore manages provisioning job persistence.
+type ProvisioningJobStore interface {
+	CreateProvisioningJob(ctx context.Context, j *domain.ProvisioningJob) error
+	GetProvisioningJob(ctx context.Context, id domain.ID) (*domain.ProvisioningJob, error)
+	ListProvisioningJobs(ctx context.Context, nodeID *domain.ID, params ListParams) ([]*domain.ProvisioningJob, int, error)
+	UpdateProvisioningJob(ctx context.Context, j *domain.ProvisioningJob) error
+	// GetActiveProvisioningJob returns the currently running job for a node, or ErrNotFound.
+	GetActiveProvisioningJob(ctx context.Context, nodeID domain.ID) (*domain.ProvisioningJob, error)
 }

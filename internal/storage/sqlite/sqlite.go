@@ -390,4 +390,23 @@ var migrations = []string{
 		used_at DATETIME,
 		created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
+
+	`CREATE TABLE IF NOT EXISTS provisioning_jobs (
+		id TEXT PRIMARY KEY,
+		node_id TEXT NOT NULL REFERENCES nodes(id),
+		tenant_id TEXT REFERENCES tenants(id),
+		action TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		current_step TEXT NOT NULL DEFAULT '',
+		steps TEXT,
+		error TEXT,
+		initiated_by TEXT NOT NULL,
+		started_at DATETIME,
+		completed_at DATETIME,
+		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_node ON provisioning_jobs(node_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_status ON provisioning_jobs(status)`,
+	`CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_node_status ON provisioning_jobs(node_id, status)`,
 }
