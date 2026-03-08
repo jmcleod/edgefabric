@@ -1,8 +1,7 @@
 // Package sqlite implements the storage.Store interface using SQLite.
 //
 // This is the default storage driver for single-instance EdgeFabric deployments.
-// It uses modernc.org/sqlite (pure Go, no CGO required for basic operation)
-// or mattn/go-sqlite3 (CGO, better performance).
+// It uses modernc.org/sqlite (pure Go, no CGO required).
 package sqlite
 
 import (
@@ -10,11 +9,13 @@ import (
 	"database/sql"
 	"fmt"
 
+	_ "modernc.org/sqlite" // Register SQLite driver as "sqlite".
+
 	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/storage"
 )
 
-// Ensure SQLiteStore implements storage.Store.
+// Ensure SQLiteStore implements storage.Store at compile time.
 var _ storage.Store = (*SQLiteStore)(nil)
 
 // SQLiteStore implements storage.Store using SQLite.
@@ -22,7 +23,7 @@ type SQLiteStore struct {
 	db *sql.DB
 }
 
-// New creates a new SQLite store.
+// New creates a new SQLite store and applies performance pragmas.
 func New(dsn string) (*SQLiteStore, error) {
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -57,7 +58,7 @@ func (s *SQLiteStore) Ping(ctx context.Context) error {
 	return s.db.PingContext(ctx)
 }
 
-// Migrate runs database migrations.
+// Migrate runs database migrations to ensure the schema is current.
 func (s *SQLiteStore) Migrate(ctx context.Context) error {
 	for _, stmt := range migrations {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
@@ -67,9 +68,54 @@ func (s *SQLiteStore) Migrate(ctx context.Context) error {
 	return nil
 }
 
+// isUniqueViolation checks if an error is a SQLite UNIQUE constraint violation.
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	return contains(err.Error(), "UNIQUE constraint failed")
+}
+
+// contains is a simple substring check to avoid importing strings.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchString(s, substr)
+}
+
+func searchString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// nullString converts a *string to sql.NullString.
+func nullString(s *string) sql.NullString {
+	if s == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: *s, Valid: true}
+}
+
+// nullIDString converts a *domain.ID (uuid.UUID) to sql.NullString for SQL.
+func nullIDString(id *domain.ID) sql.NullString {
+	if id == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: id.String(), Valid: true}
+}
+
+// scanNullString converts sql.NullString to *string.
+func scanNullString(ns sql.NullString) *string {
+	if !ns.Valid {
+		return nil
+	}
+	return &ns.String
+}
+
 // migrations contains the SQL DDL for the SQLite schema.
-// In production, this would use a proper migration framework.
-// For now, these are idempotent CREATE IF NOT EXISTS statements.
+// These are idempotent CREATE IF NOT EXISTS statements.
 var migrations = []string{
 	`CREATE TABLE IF NOT EXISTS tenants (
 		id TEXT PRIMARY KEY,
@@ -344,291 +390,4 @@ var migrations = []string{
 		used_at DATETIME,
 		created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)`,
-}
-
-// --- Stub implementations for all Store interfaces ---
-// These will be implemented in subsequent milestones.
-// For now they satisfy the interface contract so the project compiles.
-
-func (s *SQLiteStore) CreateTenant(ctx context.Context, t *domain.Tenant) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetTenant(ctx context.Context, id domain.ID) (*domain.Tenant, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetTenantBySlug(ctx context.Context, slug string) (*domain.Tenant, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListTenants(ctx context.Context, params storage.ListParams) ([]*domain.Tenant, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateTenant(ctx context.Context, t *domain.Tenant) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteTenant(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateUser(ctx context.Context, u *domain.User) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetUser(ctx context.Context, id domain.ID) (*domain.User, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListUsers(ctx context.Context, tenantID *domain.ID, params storage.ListParams) ([]*domain.User, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateUser(ctx context.Context, u *domain.User) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteUser(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateAPIKey(ctx context.Context, k *domain.APIKey) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetAPIKey(ctx context.Context, id domain.ID) (*domain.APIKey, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetAPIKeyByPrefix(ctx context.Context, prefix string) (*domain.APIKey, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListAPIKeys(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.APIKey, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteAPIKey(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateAPIKeyLastUsed(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateNode(ctx context.Context, n *domain.Node) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetNode(ctx context.Context, id domain.ID) (*domain.Node, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListNodes(ctx context.Context, tenantID *domain.ID, params storage.ListParams) ([]*domain.Node, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateNode(ctx context.Context, n *domain.Node) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteNode(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateNodeHeartbeat(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateNodeGroup(ctx context.Context, g *domain.NodeGroup) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetNodeGroup(ctx context.Context, id domain.ID) (*domain.NodeGroup, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListNodeGroups(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.NodeGroup, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateNodeGroup(ctx context.Context, g *domain.NodeGroup) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteNodeGroup(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) AddNodeToGroup(ctx context.Context, groupID, nodeID domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) RemoveNodeFromGroup(ctx context.Context, groupID, nodeID domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListGroupNodes(ctx context.Context, groupID domain.ID) ([]*domain.Node, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListNodeGroups_ByNode(ctx context.Context, nodeID domain.ID) ([]*domain.NodeGroup, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateGateway(ctx context.Context, g *domain.Gateway) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetGateway(ctx context.Context, id domain.ID) (*domain.Gateway, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListGateways(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.Gateway, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateGateway(ctx context.Context, g *domain.Gateway) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteGateway(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateGatewayHeartbeat(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateWireGuardPeer(ctx context.Context, p *domain.WireGuardPeer) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetWireGuardPeer(ctx context.Context, id domain.ID) (*domain.WireGuardPeer, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetWireGuardPeerByOwner(ctx context.Context, ownerType domain.PeerOwnerType, ownerID domain.ID) (*domain.WireGuardPeer, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListWireGuardPeers(ctx context.Context, params storage.ListParams) ([]*domain.WireGuardPeer, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateWireGuardPeer(ctx context.Context, p *domain.WireGuardPeer) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteWireGuardPeer(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateIPAllocation(ctx context.Context, ip *domain.IPAllocation) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetIPAllocation(ctx context.Context, id domain.ID) (*domain.IPAllocation, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListIPAllocations(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.IPAllocation, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateIPAllocation(ctx context.Context, ip *domain.IPAllocation) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteIPAllocation(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateBGPSession(ctx context.Context, sess *domain.BGPSession) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetBGPSession(ctx context.Context, id domain.ID) (*domain.BGPSession, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListBGPSessions(ctx context.Context, nodeID domain.ID, params storage.ListParams) ([]*domain.BGPSession, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateBGPSession(ctx context.Context, sess *domain.BGPSession) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteBGPSession(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateDNSZone(ctx context.Context, z *domain.DNSZone) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetDNSZone(ctx context.Context, id domain.ID) (*domain.DNSZone, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListDNSZones(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.DNSZone, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateDNSZone(ctx context.Context, z *domain.DNSZone) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteDNSZone(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) IncrementDNSZoneSerial(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateDNSRecord(ctx context.Context, r *domain.DNSRecord) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetDNSRecord(ctx context.Context, id domain.ID) (*domain.DNSRecord, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListDNSRecords(ctx context.Context, zoneID domain.ID, params storage.ListParams) ([]*domain.DNSRecord, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateDNSRecord(ctx context.Context, r *domain.DNSRecord) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteDNSRecord(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateCDNSite(ctx context.Context, site *domain.CDNSite) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetCDNSite(ctx context.Context, id domain.ID) (*domain.CDNSite, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListCDNSites(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.CDNSite, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateCDNSite(ctx context.Context, site *domain.CDNSite) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteCDNSite(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateCDNOrigin(ctx context.Context, o *domain.CDNOrigin) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetCDNOrigin(ctx context.Context, id domain.ID) (*domain.CDNOrigin, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListCDNOrigins(ctx context.Context, siteID domain.ID, params storage.ListParams) ([]*domain.CDNOrigin, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateCDNOrigin(ctx context.Context, o *domain.CDNOrigin) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteCDNOrigin(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateRoute(ctx context.Context, r *domain.Route) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetRoute(ctx context.Context, id domain.ID) (*domain.Route, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListRoutes(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.Route, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) UpdateRoute(ctx context.Context, r *domain.Route) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteRoute(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateSSHKey(ctx context.Context, k *domain.SSHKey) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetSSHKey(ctx context.Context, id domain.ID) (*domain.SSHKey, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListSSHKeys(ctx context.Context, params storage.ListParams) ([]*domain.SSHKey, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteSSHKey(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateTLSCertificate(ctx context.Context, c *domain.TLSCertificate) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetTLSCertificate(ctx context.Context, id domain.ID) (*domain.TLSCertificate, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListTLSCertificates(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.TLSCertificate, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) DeleteTLSCertificate(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateAuditEvent(ctx context.Context, e *domain.AuditEvent) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) ListAuditEvents(ctx context.Context, tenantID *domain.ID, params storage.ListParams) ([]*domain.AuditEvent, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) CreateEnrollmentToken(ctx context.Context, t *domain.EnrollmentToken) error {
-	return fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) GetEnrollmentToken(ctx context.Context, token string) (*domain.EnrollmentToken, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-func (s *SQLiteStore) MarkEnrollmentTokenUsed(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("not implemented")
 }
