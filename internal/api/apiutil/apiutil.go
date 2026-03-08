@@ -3,6 +3,7 @@ package apiutil
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -113,4 +114,22 @@ func ParseListParams(r *http.Request) storage.ListParams {
 		params.Limit = 200
 	}
 	return params
+}
+
+// HandleServiceError maps common service/storage errors to appropriate HTTP
+// error responses. Use this in handlers to avoid repeating the same
+// error-matching boilerplate.
+func HandleServiceError(w http.ResponseWriter, err error, resource string) {
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
+		WriteError(w, http.StatusNotFound, "not_found", resource+" not found")
+	case errors.Is(err, storage.ErrAlreadyExists):
+		WriteError(w, http.StatusConflict, "conflict", resource+" already exists")
+	case errors.Is(err, storage.ErrConflict):
+		WriteError(w, http.StatusConflict, "conflict", err.Error())
+	case errors.Is(err, storage.ErrValidation):
+		WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+	default:
+		WriteError(w, http.StatusInternalServerError, "internal_error", "unexpected error")
+	}
 }

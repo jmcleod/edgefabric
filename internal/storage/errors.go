@@ -7,4 +7,5 @@ var (
 	ErrNotFound      = errors.New("not found")
 	ErrAlreadyExists = errors.New("already exists")
 	ErrConflict      = errors.New("conflict")
+	ErrValidation    = errors.New("validation error")
 )
