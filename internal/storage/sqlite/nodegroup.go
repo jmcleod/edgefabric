@@ -150,7 +150,7 @@ func (s *SQLiteStore) ListGroupNodes(ctx context.Context, groupID domain.ID) ([]
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT n.id, n.tenant_id, n.name, n.hostname, n.public_ip, n.wireguard_ip, n.status,
 		        n.region, n.provider, n.ssh_port, n.ssh_user, n.ssh_key_id, n.binary_version,
-		        n.last_heartbeat, n.metadata, n.created_at, n.updated_at
+		        n.last_heartbeat, n.last_config_sync, n.metadata, n.created_at, n.updated_at
 		 FROM nodes n
 		 JOIN node_group_memberships m ON m.node_id = n.id
 		 WHERE m.node_group_id = ?
@@ -165,14 +165,14 @@ func (s *SQLiteStore) ListGroupNodes(ctx context.Context, groupID domain.ID) ([]
 	for rows.Next() {
 		n := &domain.Node{}
 		var tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata sql.NullString
-		var lastHeartbeat sql.NullTime
+		var lastHeartbeat, lastConfigSync sql.NullTime
 
 		if err := rows.Scan(&n.ID, &tid, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.Status,
 			&region, &provider, &n.SSHPort, &n.SSHUser, &sshKeyID, &binaryVersion,
-			&lastHeartbeat, &metadata, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			&lastHeartbeat, &lastConfigSync, &metadata, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan group node: %w", err)
 		}
-		applyNullableNodeFields(n, tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata, lastHeartbeat)
+		applyNullableNodeFields(n, tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata, lastHeartbeat, lastConfigSync)
 		nodes = append(nodes, n)
 	}
 	return nodes, rows.Err()

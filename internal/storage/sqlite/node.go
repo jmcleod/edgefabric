@@ -67,15 +67,15 @@ func (s *SQLiteStore) CreateNode(ctx context.Context, n *domain.Node) error {
 func (s *SQLiteStore) GetNode(ctx context.Context, id domain.ID) (*domain.Node, error) {
 	n := &domain.Node{}
 	var tenantID, wgIP, region, provider, sshKeyID, binaryVersion, metadata sql.NullString
-	var lastHeartbeat sql.NullTime
+	var lastHeartbeat, lastConfigSync sql.NullTime
 
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
-		        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, metadata, created_at, updated_at
+		        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at
 		 FROM nodes WHERE id = ?`, id.String(),
 	).Scan(&n.ID, &tenantID, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.Status,
 		&region, &provider, &n.SSHPort, &n.SSHUser, &sshKeyID, &binaryVersion,
-		&lastHeartbeat, &metadata, &n.CreatedAt, &n.UpdatedAt)
+		&lastHeartbeat, &lastConfigSync, &metadata, &n.CreatedAt, &n.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
@@ -83,7 +83,7 @@ func (s *SQLiteStore) GetNode(ctx context.Context, id domain.ID) (*domain.Node, 
 		return nil, fmt.Errorf("get node: %w", err)
 	}
 
-	applyNullableNodeFields(n, tenantID, wgIP, region, provider, sshKeyID, binaryVersion, metadata, lastHeartbeat)
+	applyNullableNodeFields(n, tenantID, wgIP, region, provider, sshKeyID, binaryVersion, metadata, lastHeartbeat, lastConfigSync)
 
 	// Load capabilities.
 	caps, err := s.loadNodeCapabilities(ctx, id)
@@ -120,14 +120,14 @@ func (s *SQLiteStore) ListNodes(ctx context.Context, tenantID *domain.ID, params
 	if tenantID != nil {
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
-			        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, metadata, created_at, updated_at
+			        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at
 			 FROM nodes WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 			tenantID.String(), params.Limit, params.Offset,
 		)
 	} else {
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
-			        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, metadata, created_at, updated_at
+			        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at
 			 FROM nodes ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 			params.Limit, params.Offset,
 		)
@@ -141,15 +141,15 @@ func (s *SQLiteStore) ListNodes(ctx context.Context, tenantID *domain.ID, params
 	for rows.Next() {
 		n := &domain.Node{}
 		var tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata sql.NullString
-		var lastHeartbeat sql.NullTime
+		var lastHeartbeat, lastConfigSync sql.NullTime
 
 		if err := rows.Scan(&n.ID, &tid, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.Status,
 			&region, &provider, &n.SSHPort, &n.SSHUser, &sshKeyID, &binaryVersion,
-			&lastHeartbeat, &metadata, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			&lastHeartbeat, &lastConfigSync, &metadata, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan node row: %w", err)
 		}
 
-		applyNullableNodeFields(n, tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata, lastHeartbeat)
+		applyNullableNodeFields(n, tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata, lastHeartbeat, lastConfigSync)
 		nodes = append(nodes, n)
 	}
 
@@ -244,6 +244,22 @@ func (s *SQLiteStore) UpdateNodeHeartbeat(ctx context.Context, id domain.ID) err
 	return nil
 }
 
+func (s *SQLiteStore) UpdateNodeConfigSync(ctx context.Context, id domain.ID) error {
+	now := time.Now().UTC()
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE nodes SET last_config_sync = ?, updated_at = ? WHERE id = ?`,
+		now, now, id.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("update node config sync: %w", err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
 // loadNodeCapabilities returns capabilities for a given node.
 func (s *SQLiteStore) loadNodeCapabilities(ctx context.Context, nodeID domain.ID) ([]domain.NodeCapability, error) {
 	rows, err := s.db.QueryContext(ctx,
@@ -266,7 +282,7 @@ func (s *SQLiteStore) loadNodeCapabilities(ctx context.Context, nodeID domain.ID
 }
 
 // applyNullableNodeFields applies nullable SQL scan results to a Node.
-func applyNullableNodeFields(n *domain.Node, tenantID, wgIP, region, provider, sshKeyID, binaryVersion, metadata sql.NullString, lastHeartbeat sql.NullTime) {
+func applyNullableNodeFields(n *domain.Node, tenantID, wgIP, region, provider, sshKeyID, binaryVersion, metadata sql.NullString, lastHeartbeat, lastConfigSync sql.NullTime) {
 	if tenantID.Valid {
 		id, err := uuid.Parse(tenantID.String)
 		if err == nil {
@@ -296,6 +312,9 @@ func applyNullableNodeFields(n *domain.Node, tenantID, wgIP, region, provider, s
 	}
 	if lastHeartbeat.Valid {
 		n.LastHeartbeat = &lastHeartbeat.Time
+	}
+	if lastConfigSync.Valid {
+		n.LastConfigSync = &lastConfigSync.Time
 	}
 }
 

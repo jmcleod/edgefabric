@@ -3,6 +3,7 @@ package v1
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jmcleod/edgefabric/internal/api/apiutil"
 	"github.com/jmcleod/edgefabric/internal/api/middleware"
@@ -74,6 +75,9 @@ type statusResponse struct {
 	GatewayCount     int            `json:"gateway_count"`
 	GatewaysByStatus map[string]int `json:"gateways_by_status"`
 
+	StaleNodeCount    int `json:"stale_node_count"`
+	StaleGatewayCount int `json:"stale_gateway_count"`
+
 	RouteCount    int `json:"route_count"`
 	DNSZoneCount  int `json:"dns_zone_count"`
 	CDNSiteCount  int `json:"cdn_site_count"`
@@ -116,7 +120,8 @@ func (h *StatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 		resp.UserCount = userTotal
 	}
 
-	// Node count + breakdown by status.
+	// Node count + breakdown by status + stale config detection.
+	staleThreshold := time.Now().UTC().Add(-5 * time.Minute)
 	nodes, nodeTotal, err := h.fleetSvc.ListNodes(r.Context(), tenantFilter, storage.ListParams{Limit: 200})
 	if err != nil {
 		slog.Warn("status: failed to list nodes", slog.String("error", err.Error()))
@@ -124,6 +129,12 @@ func (h *StatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 		resp.NodeCount = nodeTotal
 		for _, n := range nodes {
 			resp.NodesByStatus[string(n.Status)]++
+			// A node is "stale" if it's online but hasn't synced config recently.
+			if n.Status == domain.NodeStatusOnline {
+				if n.LastConfigSync == nil || n.LastConfigSync.Before(staleThreshold) {
+					resp.StaleNodeCount++
+				}
+			}
 		}
 	}
 
@@ -138,6 +149,11 @@ func (h *StatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 			resp.GatewayCount = gwTotal
 			for _, gw := range gateways {
 				resp.GatewaysByStatus[string(gw.Status)]++
+				if gw.Status == domain.GatewayStatusOnline {
+					if gw.LastConfigSync == nil || gw.LastConfigSync.Before(staleThreshold) {
+						resp.StaleGatewayCount++
+					}
+				}
 			}
 		}
 	} else {
@@ -158,6 +174,11 @@ func (h *StatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 				resp.GatewayCount += gwTotal
 				for _, gw := range gateways {
 					resp.GatewaysByStatus[string(gw.Status)]++
+					if gw.Status == domain.GatewayStatusOnline {
+						if gw.LastConfigSync == nil || gw.LastConfigSync.Before(staleThreshold) {
+							resp.StaleGatewayCount++
+						}
+					}
 				}
 			}
 		}

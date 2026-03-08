@@ -97,6 +97,7 @@ type NodeStore interface {
 	UpdateNode(ctx context.Context, n *domain.Node) error
 	DeleteNode(ctx context.Context, id domain.ID) error
 	UpdateNodeHeartbeat(ctx context.Context, id domain.ID) error
+	UpdateNodeConfigSync(ctx context.Context, id domain.ID) error
 }
 
 // NodeGroupStore manages node group persistence.
@@ -120,6 +121,7 @@ type GatewayStore interface {
 	UpdateGateway(ctx context.Context, g *domain.Gateway) error
 	DeleteGateway(ctx context.Context, id domain.ID) error
 	UpdateGatewayHeartbeat(ctx context.Context, id domain.ID) error
+	UpdateGatewayConfigSync(ctx context.Context, id domain.ID) error
 }
 
 // WireGuardPeerStore manages WireGuard peer persistence.

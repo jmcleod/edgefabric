@@ -567,4 +567,14 @@ var migrations = []Migration{
 		Description: "create provisioning_jobs node+status index",
 		SQL:         `CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_node_status ON provisioning_jobs(node_id, status)`,
 	},
+
+	{
+		Description: "add last_config_sync column to nodes",
+		SQL:         `ALTER TABLE nodes ADD COLUMN last_config_sync DATETIME`,
+	},
+
+	{
+		Description: "add last_config_sync column to gateways",
+		SQL:         `ALTER TABLE gateways ADD COLUMN last_config_sync DATETIME`,
+	},
 }

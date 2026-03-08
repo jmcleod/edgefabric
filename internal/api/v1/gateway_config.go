@@ -2,6 +2,7 @@ package v1
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jmcleod/edgefabric/internal/api/apiutil"
@@ -13,14 +14,17 @@ import (
 
 // GatewayConfigHandler serves gateway configuration files for polling-based sync.
 // Gateways poll these endpoints to get their desired route forwarding configuration.
+// On each successful config fetch, the gateway's last_config_sync timestamp is updated
+// for config drift visibility.
 type GatewayConfigHandler struct {
-	routeSvc   route.Service
-	authorizer rbac.Authorizer
+	routeSvc     route.Service
+	gatewayStore storage.GatewayStore
+	authorizer   rbac.Authorizer
 }
 
 // NewGatewayConfigHandler creates a new gateway config handler.
-func NewGatewayConfigHandler(routeSvc route.Service, authorizer rbac.Authorizer) *GatewayConfigHandler {
-	return &GatewayConfigHandler{routeSvc: routeSvc, authorizer: authorizer}
+func NewGatewayConfigHandler(routeSvc route.Service, gatewayStore storage.GatewayStore, authorizer rbac.Authorizer) *GatewayConfigHandler {
+	return &GatewayConfigHandler{routeSvc: routeSvc, gatewayStore: gatewayStore, authorizer: authorizer}
 }
 
 // Register mounts gateway config routes on the mux.
@@ -47,6 +51,14 @@ func (h *GatewayConfigHandler) GetRouteConfig(w http.ResponseWriter, r *http.Req
 		}
 		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get route config")
 		return
+	}
+
+	// Record config sync timestamp (best-effort).
+	if err := h.gatewayStore.UpdateGatewayConfigSync(r.Context(), id); err != nil {
+		slog.Warn("failed to update gateway config sync timestamp",
+			slog.String("gateway_id", id.String()),
+			slog.String("error", err.Error()),
+		)
 	}
 
 	apiutil.JSON(w, http.StatusOK, config)

@@ -41,9 +41,10 @@ type Node struct {
 	SSHPort       int              `json:"ssh_port" db:"ssh_port"`
 	SSHUser       string           `json:"ssh_user" db:"ssh_user"`
 	SSHKeyID      *ID              `json:"ssh_key_id,omitempty" db:"ssh_key_id"`
-	BinaryVersion string           `json:"binary_version,omitempty" db:"binary_version"`
-	LastHeartbeat *time.Time       `json:"last_heartbeat,omitempty" db:"last_heartbeat"`
-	Capabilities  []NodeCapability `json:"capabilities" db:"-"`
+	BinaryVersion  string           `json:"binary_version,omitempty" db:"binary_version"`
+	LastHeartbeat  *time.Time       `json:"last_heartbeat,omitempty" db:"last_heartbeat"`
+	LastConfigSync *time.Time       `json:"last_config_sync,omitempty" db:"last_config_sync"`
+	Capabilities   []NodeCapability `json:"capabilities" db:"-"`
 	Metadata      json.RawMessage  `json:"metadata,omitempty" db:"metadata"`
 	CreatedAt     time.Time        `json:"created_at" db:"created_at"`
 	UpdatedAt     time.Time        `json:"updated_at" db:"updated_at"`

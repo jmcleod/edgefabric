@@ -44,13 +44,13 @@ func (s *SQLiteStore) CreateGateway(ctx context.Context, g *domain.Gateway) erro
 func (s *SQLiteStore) GetGateway(ctx context.Context, id domain.ID) (*domain.Gateway, error) {
 	g := &domain.Gateway{}
 	var publicIP, wgIP, enrollToken, metadata sql.NullString
-	var lastHeartbeat sql.NullTime
+	var lastHeartbeat, lastConfigSync sql.NullTime
 
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, tenant_id, name, public_ip, wireguard_ip, status, enrollment_token, last_heartbeat, metadata, created_at, updated_at
+		`SELECT id, tenant_id, name, public_ip, wireguard_ip, status, enrollment_token, last_heartbeat, last_config_sync, metadata, created_at, updated_at
 		 FROM gateways WHERE id = ?`, id.String(),
 	).Scan(&g.ID, &g.TenantID, &g.Name, &publicIP, &wgIP, &g.Status,
-		&enrollToken, &lastHeartbeat, &metadata, &g.CreatedAt, &g.UpdatedAt)
+		&enrollToken, &lastHeartbeat, &lastConfigSync, &metadata, &g.CreatedAt, &g.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
@@ -58,7 +58,7 @@ func (s *SQLiteStore) GetGateway(ctx context.Context, id domain.ID) (*domain.Gat
 		return nil, fmt.Errorf("get gateway: %w", err)
 	}
 
-	applyNullableGatewayFields(g, publicIP, wgIP, enrollToken, metadata, lastHeartbeat)
+	applyNullableGatewayFields(g, publicIP, wgIP, enrollToken, metadata, lastHeartbeat, lastConfigSync)
 	return g, nil
 }
 
@@ -76,7 +76,7 @@ func (s *SQLiteStore) ListGateways(ctx context.Context, tenantID domain.ID, para
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, tenant_id, name, public_ip, wireguard_ip, status, enrollment_token, last_heartbeat, metadata, created_at, updated_at
+		`SELECT id, tenant_id, name, public_ip, wireguard_ip, status, enrollment_token, last_heartbeat, last_config_sync, metadata, created_at, updated_at
 		 FROM gateways WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		tenantID.String(), params.Limit, params.Offset,
 	)
@@ -89,13 +89,13 @@ func (s *SQLiteStore) ListGateways(ctx context.Context, tenantID domain.ID, para
 	for rows.Next() {
 		g := &domain.Gateway{}
 		var publicIP, wgIP, enrollToken, metadata sql.NullString
-		var lastHeartbeat sql.NullTime
+		var lastHeartbeat, lastConfigSync sql.NullTime
 
 		if err := rows.Scan(&g.ID, &g.TenantID, &g.Name, &publicIP, &wgIP, &g.Status,
-			&enrollToken, &lastHeartbeat, &metadata, &g.CreatedAt, &g.UpdatedAt); err != nil {
+			&enrollToken, &lastHeartbeat, &lastConfigSync, &metadata, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan gateway: %w", err)
 		}
-		applyNullableGatewayFields(g, publicIP, wgIP, enrollToken, metadata, lastHeartbeat)
+		applyNullableGatewayFields(g, publicIP, wgIP, enrollToken, metadata, lastHeartbeat, lastConfigSync)
 		gateways = append(gateways, g)
 	}
 	return gateways, total, rows.Err()
@@ -156,7 +156,23 @@ func (s *SQLiteStore) UpdateGatewayHeartbeat(ctx context.Context, id domain.ID) 
 }
 
 // applyNullableGatewayFields applies nullable SQL scan results to a Gateway.
-func applyNullableGatewayFields(g *domain.Gateway, publicIP, wgIP, enrollToken, metadata sql.NullString, lastHeartbeat sql.NullTime) {
+func (s *SQLiteStore) UpdateGatewayConfigSync(ctx context.Context, id domain.ID) error {
+	now := time.Now().UTC()
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE gateways SET last_config_sync = ?, updated_at = ? WHERE id = ?`,
+		now, now, id.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("update gateway config sync: %w", err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+func applyNullableGatewayFields(g *domain.Gateway, publicIP, wgIP, enrollToken, metadata sql.NullString, lastHeartbeat, lastConfigSync sql.NullTime) {
 	if publicIP.Valid {
 		g.PublicIP = publicIP.String
 	}
@@ -171,5 +187,8 @@ func applyNullableGatewayFields(g *domain.Gateway, publicIP, wgIP, enrollToken, 
 	}
 	if lastHeartbeat.Valid {
 		g.LastHeartbeat = &lastHeartbeat.Time
+	}
+	if lastConfigSync.Valid {
+		g.LastConfigSync = &lastConfigSync.Time
 	}
 }

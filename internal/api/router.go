@@ -39,7 +39,9 @@ type Services struct {
 	Authorizer      rbac.Authorizer
 	AuditLog   audit.Logger
 	APIKeys    storage.APIKeyStore
-	SSHKeys    storage.SSHKeyStore
+	SSHKeys         storage.SSHKeyStore
+	NodeStore       storage.NodeStore
+	GatewayStore    storage.GatewayStore
 	SchemaVersioner storage.SchemaVersioner
 	Health          *observability.HealthChecker
 	Metrics         *observability.Metrics
@@ -113,7 +115,7 @@ func NewRouter(svc Services) http.Handler {
 		nodeNetHandler := v1.NewNodeNetworkingHandler(svc.NetworkingSvc, svc.Authorizer)
 		nodeNetHandler.Register(mux, authMW)
 
-		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.DNSSvc, svc.CDNSvc, svc.RouteSvc, svc.Authorizer)
+		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.DNSSvc, svc.CDNSvc, svc.RouteSvc, svc.NodeStore, svc.Authorizer)
 		nodeConfigHandler.Register(mux, authMW)
 	}
 
@@ -140,7 +142,7 @@ func NewRouter(svc Services) http.Handler {
 		routeHandler := v1.NewRouteHandler(svc.RouteSvc, svc.Authorizer, svc.AuditLog)
 		routeHandler.Register(mux, authMW)
 
-		gatewayConfigHandler := v1.NewGatewayConfigHandler(svc.RouteSvc, svc.Authorizer)
+		gatewayConfigHandler := v1.NewGatewayConfigHandler(svc.RouteSvc, svc.GatewayStore, svc.Authorizer)
 		gatewayConfigHandler.Register(mux, authMW)
 	}
 

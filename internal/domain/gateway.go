@@ -26,6 +26,7 @@ type Gateway struct {
 	Status          GatewayStatus   `json:"status" db:"status"`
 	EnrollmentToken string          `json:"-" db:"enrollment_token"`
 	LastHeartbeat   *time.Time      `json:"last_heartbeat,omitempty" db:"last_heartbeat"`
+	LastConfigSync  *time.Time      `json:"last_config_sync,omitempty" db:"last_config_sync"`
 	Metadata        json.RawMessage `json:"metadata,omitempty" db:"metadata"`
 	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`
