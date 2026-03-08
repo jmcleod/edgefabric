@@ -105,6 +105,9 @@ func NewRouter(svc Services) http.Handler {
 
 		nodeNetHandler := v1.NewNodeNetworkingHandler(svc.NetworkingSvc, svc.Authorizer)
 		nodeNetHandler.Register(mux, authMW)
+
+		nodeConfigHandler := v1.NewNodeConfigHandler(svc.NetworkingSvc, svc.Authorizer)
+		nodeConfigHandler.Register(mux, authMW)
 	}
 
 	// OpenAPI spec (unauthenticated).

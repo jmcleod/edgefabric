@@ -25,6 +25,8 @@ func (p *DefaultProvisioner) executeStep(ctx context.Context, step domain.Provis
 		return p.stepStartService(ctx, node)
 	case domain.StepGenerateWGKeys:
 		return p.stepGenerateWGKeys(ctx, node)
+	case domain.StepConfigureWireGuard:
+		return p.stepConfigureWireGuard(ctx, node)
 	case domain.StepWaitEnrollment:
 		return p.stepWaitEnrollment(ctx, node)
 	case domain.StepVerifyOnline:
@@ -238,6 +240,40 @@ func (p *DefaultProvisioner) stepGenerateWGKeys(ctx context.Context, node *domai
 	}
 
 	return fmt.Sprintf("WG keys generated, overlay IP %s assigned", overlayIP), nil
+}
+
+func (p *DefaultProvisioner) stepConfigureWireGuard(ctx context.Context, node *domain.Node) (string, error) {
+	if p.wgConfigGen == nil {
+		return "wireguard config sync skipped (config generator not configured)", nil
+	}
+
+	// Generate wg0.conf for the node.
+	wgConf, err := p.wgConfigGen.GenerateNodeConfig(ctx, node.ID)
+	if err != nil {
+		return "", fmt.Errorf("generate WG config: %w", err)
+	}
+
+	// Push config to node via SSH.
+	session, err := p.connectToNode(ctx, node)
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	// Write wg0.conf and bring up the interface.
+	cmd := fmt.Sprintf("mkdir -p /etc/wireguard && cat > /etc/wireguard/wg0.conf << 'WGCONF'\n%s\nWGCONF", wgConf)
+	output, err := session.Run(cmd)
+	if err != nil {
+		return output, fmt.Errorf("write wg0.conf: %w", err)
+	}
+
+	// Bring up WireGuard interface (idempotent: down first if already up).
+	output, err = session.Run("wg-quick down wg0 2>/dev/null; wg-quick up wg0")
+	if err != nil {
+		return output, fmt.Errorf("wg-quick up: %w", err)
+	}
+
+	return "wireguard config written and interface started", nil
 }
 
 func (p *DefaultProvisioner) stepWaitEnrollment(_ context.Context, _ *domain.Node) (string, error) {

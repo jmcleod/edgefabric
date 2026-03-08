@@ -13,6 +13,7 @@ func PipelineFor(action domain.ProvisioningAction) []domain.ProvisioningStep {
 			domain.StepInstallSystemd,
 			domain.StepStartService,
 			domain.StepGenerateWGKeys,
+			domain.StepConfigureWireGuard,
 			domain.StepWaitEnrollment,
 			domain.StepVerifyOnline,
 		}
@@ -43,6 +44,7 @@ func PipelineFor(action domain.ProvisioningAction) []domain.ProvisioningStep {
 			domain.StepInstallSystemd,
 			domain.StepStartService,
 			domain.StepGenerateWGKeys,
+			domain.StepConfigureWireGuard,
 			domain.StepWaitEnrollment,
 			domain.StepVerifyOnline,
 		}

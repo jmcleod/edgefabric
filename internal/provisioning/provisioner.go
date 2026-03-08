@@ -16,17 +16,25 @@ import (
 // Ensure DefaultProvisioner implements Service at compile time.
 var _ Service = (*DefaultProvisioner)(nil)
 
+// WireGuardConfigGenerator generates WireGuard configuration for nodes.
+// Defined here as a narrow interface to avoid circular imports with the
+// networking package, which imports provisioning for key generation.
+type WireGuardConfigGenerator interface {
+	GenerateNodeConfig(ctx context.Context, nodeID domain.ID) (string, error)
+}
+
 // DefaultProvisioner implements the Service interface.
 type DefaultProvisioner struct {
-	nodes      storage.NodeStore
-	jobs       storage.ProvisioningJobStore
-	tokens     storage.EnrollmentTokenStore
-	peers      storage.WireGuardPeerStore
-	sshKeys    storage.SSHKeyStore
-	sshClient  ssh.Client
-	secrets    *secrets.Store
-	wgConfig   config.WireGuardHub
-	extURL     string // Controller external URL for node config.
+	nodes         storage.NodeStore
+	jobs          storage.ProvisioningJobStore
+	tokens        storage.EnrollmentTokenStore
+	peers         storage.WireGuardPeerStore
+	sshKeys       storage.SSHKeyStore
+	sshClient     ssh.Client
+	secrets       *secrets.Store
+	wgConfig      config.WireGuardHub
+	extURL        string // Controller external URL for node config.
+	wgConfigGen   WireGuardConfigGenerator // Optional: for WireGuard config sync.
 }
 
 // NewProvisioner creates a new DefaultProvisioner.
@@ -52,6 +60,13 @@ func NewProvisioner(
 		wgConfig:  wgConfig,
 		extURL:    externalURL,
 	}
+}
+
+// SetWireGuardConfigGenerator sets the WireGuard config generator for config sync.
+// This is called after construction to avoid circular dependencies between
+// the provisioning and networking packages.
+func (p *DefaultProvisioner) SetWireGuardConfigGenerator(gen WireGuardConfigGenerator) {
+	p.wgConfigGen = gen
 }
 
 // --- Lifecycle actions ---

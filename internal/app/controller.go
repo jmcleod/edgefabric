@@ -109,6 +109,9 @@ func RunController(cfg *config.Config) error {
 		cfg.Controller.WireGuard,
 	)
 
+	// Connect provisioning service to networking for WG config sync.
+	provisioningSvc.SetWireGuardConfigGenerator(networkingSvc)
+
 	// Bootstrap controller's WireGuard peer (idempotent).
 	if _, err := networking.BootstrapControllerPeer(
 		context.Background(),
