@@ -21,41 +21,8 @@ import (
 // DNSZoneStore and DNSRecordStore are implemented in
 // dns_zone.go and dns_record.go respectively.
 
-// --- CDNSiteStore stubs (Milestone 7) ---
-
-func (s *SQLiteStore) CreateCDNSite(ctx context.Context, site *domain.CDNSite) error {
-	return fmt.Errorf("CDNSiteStore: not implemented")
-}
-func (s *SQLiteStore) GetCDNSite(ctx context.Context, id domain.ID) (*domain.CDNSite, error) {
-	return nil, fmt.Errorf("CDNSiteStore: not implemented")
-}
-func (s *SQLiteStore) ListCDNSites(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.CDNSite, int, error) {
-	return nil, 0, fmt.Errorf("CDNSiteStore: not implemented")
-}
-func (s *SQLiteStore) UpdateCDNSite(ctx context.Context, site *domain.CDNSite) error {
-	return fmt.Errorf("CDNSiteStore: not implemented")
-}
-func (s *SQLiteStore) DeleteCDNSite(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("CDNSiteStore: not implemented")
-}
-
-// --- CDNOriginStore stubs (Milestone 7) ---
-
-func (s *SQLiteStore) CreateCDNOrigin(ctx context.Context, o *domain.CDNOrigin) error {
-	return fmt.Errorf("CDNOriginStore: not implemented")
-}
-func (s *SQLiteStore) GetCDNOrigin(ctx context.Context, id domain.ID) (*domain.CDNOrigin, error) {
-	return nil, fmt.Errorf("CDNOriginStore: not implemented")
-}
-func (s *SQLiteStore) ListCDNOrigins(ctx context.Context, siteID domain.ID, params storage.ListParams) ([]*domain.CDNOrigin, int, error) {
-	return nil, 0, fmt.Errorf("CDNOriginStore: not implemented")
-}
-func (s *SQLiteStore) UpdateCDNOrigin(ctx context.Context, o *domain.CDNOrigin) error {
-	return fmt.Errorf("CDNOriginStore: not implemented")
-}
-func (s *SQLiteStore) DeleteCDNOrigin(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("CDNOriginStore: not implemented")
-}
+// CDNSiteStore and CDNOriginStore are implemented in
+// cdn_site.go and cdn_origin.go respectively.
 
 // --- RouteStore stubs (Milestone 8) ---
 
