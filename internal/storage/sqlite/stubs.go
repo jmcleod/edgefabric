@@ -18,44 +18,8 @@ import (
 // IPAllocationStore and BGPSessionStore are implemented in
 // ip_allocation.go and bgp_session.go respectively.
 
-// --- DNSZoneStore stubs (Milestone 6) ---
-
-func (s *SQLiteStore) CreateDNSZone(ctx context.Context, z *domain.DNSZone) error {
-	return fmt.Errorf("DNSZoneStore: not implemented")
-}
-func (s *SQLiteStore) GetDNSZone(ctx context.Context, id domain.ID) (*domain.DNSZone, error) {
-	return nil, fmt.Errorf("DNSZoneStore: not implemented")
-}
-func (s *SQLiteStore) ListDNSZones(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.DNSZone, int, error) {
-	return nil, 0, fmt.Errorf("DNSZoneStore: not implemented")
-}
-func (s *SQLiteStore) UpdateDNSZone(ctx context.Context, z *domain.DNSZone) error {
-	return fmt.Errorf("DNSZoneStore: not implemented")
-}
-func (s *SQLiteStore) DeleteDNSZone(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("DNSZoneStore: not implemented")
-}
-func (s *SQLiteStore) IncrementDNSZoneSerial(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("DNSZoneStore: not implemented")
-}
-
-// --- DNSRecordStore stubs (Milestone 6) ---
-
-func (s *SQLiteStore) CreateDNSRecord(ctx context.Context, r *domain.DNSRecord) error {
-	return fmt.Errorf("DNSRecordStore: not implemented")
-}
-func (s *SQLiteStore) GetDNSRecord(ctx context.Context, id domain.ID) (*domain.DNSRecord, error) {
-	return nil, fmt.Errorf("DNSRecordStore: not implemented")
-}
-func (s *SQLiteStore) ListDNSRecords(ctx context.Context, zoneID domain.ID, params storage.ListParams) ([]*domain.DNSRecord, int, error) {
-	return nil, 0, fmt.Errorf("DNSRecordStore: not implemented")
-}
-func (s *SQLiteStore) UpdateDNSRecord(ctx context.Context, r *domain.DNSRecord) error {
-	return fmt.Errorf("DNSRecordStore: not implemented")
-}
-func (s *SQLiteStore) DeleteDNSRecord(ctx context.Context, id domain.ID) error {
-	return fmt.Errorf("DNSRecordStore: not implemented")
-}
+// DNSZoneStore and DNSRecordStore are implemented in
+// dns_zone.go and dns_record.go respectively.
 
 // --- CDNSiteStore stubs (Milestone 7) ---
 
