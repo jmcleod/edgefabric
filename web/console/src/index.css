@@ -1,0 +1,209 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* EdgeFabric Design System - Infrastructure-grade admin UI */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* EdgeFabric Light Mode */
+    --background: 0 0% 98%;
+    --foreground: 0 0% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 15%;
+
+    /* Plum - Primary brand color */
+    --primary: 274 57% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Thistle - Secondary */
+    --secondary: 274 55% 50%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 30 20% 92%;
+    --muted-foreground: 0 0% 40%;
+
+    /* Crocus - Accent */
+    --accent: 262 100% 69%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 15% 85%;
+    --input: 30 15% 85%;
+    --ring: 274 57% 35%;
+
+    --radius: 0.5rem;
+
+    /* Status colors */
+    --status-healthy: 142 76% 36%;
+    --status-warning: 38 92% 50%;
+    --status-critical: 0 84% 60%;
+    --status-unknown: 0 0% 50%;
+    --status-syncing: 262 100% 69%;
+
+    /* Sidebar - Light */
+    --sidebar-background: 274 57% 35%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 262 100% 69%;
+    --sidebar-primary-foreground: 0 0% 15%;
+    --sidebar-accent: 274 45% 45%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 274 45% 45%;
+    --sidebar-ring: 262 100% 69%;
+
+    /* Custom tokens */
+    --surface-elevated: 0 0% 100%;
+    --text-dim: 0 0% 50%;
+    --highlight-row: 274 57% 35% / 0.06;
+
+    /* EdgeFabric accent colors */
+    --persia: 200 34% 36%;
+    --blush: 299 47% 53%;
+    --bordeaux: 320 96% 18%;
+  }
+
+  .dark {
+    /* EdgeFabric Dark Mode - Nighttime base */
+    --background: 0 0% 9%;
+    --foreground: 0 0% 95%;
+
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 95%;
+
+    /* Plum - Primary brand color */
+    --primary: 262 100% 69%;
+    --primary-foreground: 0 0% 9%;
+
+    /* Thistle */
+    --secondary: 274 55% 50%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 65%;
+
+    /* Crocus - Accent */
+    --accent: 274 57% 35%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 262 100% 69%;
+
+    /* Status colors - slightly brighter for dark mode */
+    --status-healthy: 142 76% 42%;
+    --status-warning: 38 92% 55%;
+    --status-critical: 0 84% 65%;
+    --status-unknown: 0 0% 55%;
+    --status-syncing: 262 100% 69%;
+
+    /* Sidebar - Dark */
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 75%;
+    --sidebar-primary: 262 100% 69%;
+    --sidebar-primary-foreground: 0 0% 9%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 18%;
+    --sidebar-ring: 262 100% 69%;
+
+    /* Custom tokens */
+    --surface-elevated: 0 0% 14%;
+    --text-dim: 0 0% 50%;
+    --highlight-row: 262 100% 69% / 0.08;
+
+    /* EdgeFabric accent colors */
+    --persia: 200 34% 36%;
+    --blush: 299 47% 53%;
+    --bordeaux: 320 96% 18%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Montserrat', sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  }
+}
+
+/* Custom scrollbar */
+@layer components {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Status badge variants */
+  .status-healthy {
+    @apply bg-[hsl(var(--status-healthy)/0.15)] text-[hsl(var(--status-healthy))] border-[hsl(var(--status-healthy)/0.3)];
+  }
+
+  .status-warning {
+    @apply bg-[hsl(var(--status-warning)/0.15)] text-[hsl(var(--status-warning))] border-[hsl(var(--status-warning)/0.3)];
+  }
+
+  .status-critical {
+    @apply bg-[hsl(var(--status-critical)/0.15)] text-[hsl(var(--status-critical))] border-[hsl(var(--status-critical)/0.3)];
+  }
+
+  .status-syncing {
+    @apply bg-[hsl(var(--status-syncing)/0.15)] text-[hsl(var(--status-syncing))] border-[hsl(var(--status-syncing)/0.3)];
+  }
+
+  .status-unknown {
+    @apply bg-[hsl(var(--status-unknown)/0.15)] text-[hsl(var(--status-unknown))] border-[hsl(var(--status-unknown)/0.3)];
+  }
+
+  /* Data table row hover */
+  .data-row:hover {
+    background: hsl(var(--highlight-row));
+  }
+
+  /* Monospace data display */
+  .mono-data {
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 0.8125rem;
+  }
+}
+
+/* Animation utilities */
+@keyframes pulse-status {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-status {
+  animation: pulse-status 2s ease-in-out infinite;
+}

@@ -34,3 +34,7 @@ Thumbs.db
 
 # Generated
 openapi/generated/
+
+# SPA
+web/console/node_modules/
+web/console/dist/
