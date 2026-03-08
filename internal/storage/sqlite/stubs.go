@@ -159,26 +159,5 @@ func (s *SQLiteStore) DeleteTLSCertificate(ctx context.Context, id domain.ID) er
 	return fmt.Errorf("TLSCertificateStore: not implemented")
 }
 
-// --- ProvisioningJobStore stubs ---
-
-func (s *SQLiteStore) CreateProvisioningJob(ctx context.Context, j *domain.ProvisioningJob) error {
-	return fmt.Errorf("ProvisioningJobStore: not implemented")
-}
-func (s *SQLiteStore) GetProvisioningJob(ctx context.Context, id domain.ID) (*domain.ProvisioningJob, error) {
-	return nil, fmt.Errorf("ProvisioningJobStore: not implemented")
-}
-func (s *SQLiteStore) ListProvisioningJobs(ctx context.Context, nodeID *domain.ID, params storage.ListParams) ([]*domain.ProvisioningJob, int, error) {
-	return nil, 0, fmt.Errorf("ProvisioningJobStore: not implemented")
-}
-func (s *SQLiteStore) UpdateProvisioningJob(ctx context.Context, j *domain.ProvisioningJob) error {
-	return fmt.Errorf("ProvisioningJobStore: not implemented")
-}
-func (s *SQLiteStore) GetActiveProvisioningJob(ctx context.Context, nodeID domain.ID) (*domain.ProvisioningJob, error) {
-	return nil, fmt.Errorf("ProvisioningJobStore: not implemented")
-}
-
-// --- SSHKeyStore UpdateSSHKey stub ---
-
-func (s *SQLiteStore) UpdateSSHKey(ctx context.Context, k *domain.SSHKey) error {
-	return fmt.Errorf("SSHKeyStore.UpdateSSHKey: not implemented")
-}
+// ProvisioningJobStore and UpdateSSHKey are implemented in
+// provisioning_job.go and sshkey.go respectively.

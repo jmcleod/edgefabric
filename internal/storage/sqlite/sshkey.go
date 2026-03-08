@@ -77,6 +77,22 @@ func (s *SQLiteStore) ListSSHKeys(ctx context.Context, params storage.ListParams
 	return keys, total, rows.Err()
 }
 
+func (s *SQLiteStore) UpdateSSHKey(ctx context.Context, k *domain.SSHKey) error {
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE ssh_keys SET name = ?, public_key = ?, private_key = ?, fingerprint = ?, last_rotated_at = ?
+		 WHERE id = ?`,
+		k.Name, k.PublicKey, k.PrivateKey, k.Fingerprint, k.LastRotatedAt, k.ID.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("update ssh key: %w", err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
 func (s *SQLiteStore) DeleteSSHKey(ctx context.Context, id domain.ID) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM ssh_keys WHERE id = ?`, id.String())
 	if err != nil {
