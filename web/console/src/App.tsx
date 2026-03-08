@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { AuthProvider, RequireAuth } from "@/hooks/useAuth";
+import LoginPage from "./pages/LoginPage";
 import GlobalDashboard from "./pages/GlobalDashboard";
 import NodesPage from "./pages/NodesPage";
 import NodeDetailPage from "./pages/NodeDetailPage";
@@ -15,7 +17,14 @@ import ProvisioningJobsPage from "./pages/ProvisioningJobsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,       // Consider data fresh for 30s
+      refetchOnWindowFocus: true,
+    },
+  },
+});
 
 const App = () => (
   <ThemeProvider>
@@ -24,32 +33,36 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            {/* Global/SuperUser Routes */}
-            <Route path="/" element={<GlobalDashboard />} />
-            <Route path="/nodes" element={<NodesPage />} />
-            <Route path="/nodes/:id" element={<NodeDetailPage />} />
-            <Route path="/tenants" element={<TenantsPage />} />
-            <Route path="/gateways" element={<GatewaysPage />} />
-            <Route path="/jobs" element={<ProvisioningJobsPage />} />
-            <Route path="/audit" element={<AuditLogsPage />} />
-            
-            {/* Tenant Routes */}
-            <Route path="/tenant/dns/zones" element={<DNSZonesPage />} />
-            <Route path="/tenant/cdn/services" element={<CDNServicesPage />} />
-            
-            {/* Placeholder routes for nav completeness */}
-            <Route path="/fleet-health" element={<GlobalDashboard />} />
-            <Route path="/node-groups" element={<NodesPage />} />
-            <Route path="/networking/wireguard" element={<GlobalDashboard />} />
-            <Route path="/networking/bgp" element={<GlobalDashboard />} />
-            <Route path="/networking/ips" element={<GlobalDashboard />} />
-            <Route path="/users" element={<GlobalDashboard />} />
-            <Route path="/settings" element={<GlobalDashboard />} />
-            
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AuthProvider>
+            <Routes>
+              {/* Public route */}
+              <Route path="/login" element={<LoginPage />} />
+
+              {/* Protected routes */}
+              <Route path="/" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
+              <Route path="/nodes" element={<RequireAuth><NodesPage /></RequireAuth>} />
+              <Route path="/nodes/:id" element={<RequireAuth><NodeDetailPage /></RequireAuth>} />
+              <Route path="/tenants" element={<RequireAuth><TenantsPage /></RequireAuth>} />
+              <Route path="/gateways" element={<RequireAuth><GatewaysPage /></RequireAuth>} />
+              <Route path="/jobs" element={<RequireAuth><ProvisioningJobsPage /></RequireAuth>} />
+              <Route path="/audit" element={<RequireAuth><AuditLogsPage /></RequireAuth>} />
+
+              {/* Tenant-scoped routes */}
+              <Route path="/tenant/dns/zones" element={<RequireAuth><DNSZonesPage /></RequireAuth>} />
+              <Route path="/tenant/cdn/services" element={<RequireAuth><CDNServicesPage /></RequireAuth>} />
+
+              {/* Placeholder routes for nav completeness */}
+              <Route path="/fleet-health" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
+              <Route path="/node-groups" element={<RequireAuth><NodesPage /></RequireAuth>} />
+              <Route path="/networking/wireguard" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
+              <Route path="/networking/bgp" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
+              <Route path="/networking/ips" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
+              <Route path="/users" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
+              <Route path="/settings" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

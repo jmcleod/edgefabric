@@ -1,5 +1,5 @@
-import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Sidebar,
   SidebarContent,
@@ -33,8 +33,9 @@ import {
   Waypoints,
   RefreshCw,
   Disc,
+  LogOut,
 } from 'lucide-react';
-import { currentUser } from '@/data/mockData';
+import { Button } from '@/components/ui/button';
 
 interface NavItem {
   title: string;
@@ -136,8 +137,9 @@ const tenantNavigation: NavSection[] = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
+  const { user, logout } = useAuth();
 
-  const isSuperUser = currentUser.role === 'superuser';
+  const isSuperUser = user?.role === 'superuser';
   const navigation = isSuperUser ? globalNavigation : tenantNavigation;
 
   return (
@@ -190,13 +192,24 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent text-xs font-medium text-sidebar-accent-foreground">
-            {currentUser.name.split(' ').map((n) => n[0]).join('')}
+            {user?.name ? user.name.split(' ').map((n) => n[0]).join('') : '?'}
           </div>
           {!collapsed && (
-            <div className="flex flex-col overflow-hidden">
-              <span className="truncate text-sm font-medium text-sidebar-foreground">{currentUser.name}</span>
-              <span className="truncate text-xs text-sidebar-foreground/60">{currentUser.email}</span>
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <span className="truncate text-sm font-medium text-sidebar-foreground">{user?.name || 'User'}</span>
+              <span className="truncate text-xs text-sidebar-foreground/60">{user?.email || ''}</span>
             </div>
+          )}
+          {!collapsed && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+              onClick={logout}
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           )}
         </div>
       </SidebarFooter>
