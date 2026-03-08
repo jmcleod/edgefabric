@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -129,8 +131,22 @@ func RunNode(cfg *config.Config) error {
 
 	// TODO: Connect to controller over WireGuard.
 
+	// Start health/metrics server for Prometheus scraping and health probes.
+	healthSrv := startNodeHealthServer(cfg.Node, bgpSvc, dnsSvc, cdnSvc, routeSvc, logger)
+
 	<-ctx.Done()
 	logger.Info("shutting down node")
+
+	// Shutdown health server first.
+	if healthSrv != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := healthSrv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("failed to stop health server", slog.String("error", err.Error()))
+		} else {
+			logger.Info("health server stopped")
+		}
+	}
 
 	// Graceful shutdown of route forwarding (before CDN, DNS, BGP).
 	if routeSvc != nil {
@@ -340,4 +356,101 @@ func routeReconcileLoop(ctx context.Context, svc routeserver.Service, controller
 			)
 		}
 	}
+}
+
+// startNodeHealthServer creates and starts an HTTP server for health checks
+// and Prometheus metrics on the node. Returns nil if the server fails to start.
+func startNodeHealthServer(
+	cfg config.NodeConfig,
+	bgpSvc bgp.Service,
+	dnsSvc dnsserver.Service,
+	cdnSvc cdnserver.Service,
+	routeSvc routeserver.Service,
+	logger *slog.Logger,
+) *http.Server {
+	healthAddr := cfg.HealthAddr
+	if healthAddr == "" {
+		healthAddr = ":9090"
+	}
+
+	health := observability.NewHealthChecker()
+	metrics := observability.NewMetrics()
+
+	// Register health checks for enabled services.
+	if bgpSvc != nil {
+		health.Register(observability.HealthCheck{
+			Name: "bgp",
+			Check: func(ctx context.Context) error {
+				_, err := bgpSvc.GetStatus(ctx)
+				return err
+			},
+		})
+	}
+	if dnsSvc != nil {
+		health.Register(observability.HealthCheck{
+			Name: "dns",
+			Check: func(ctx context.Context) error {
+				status, err := dnsSvc.GetStatus(ctx)
+				if err != nil {
+					return err
+				}
+				if !status.Listening {
+					return fmt.Errorf("DNS service not listening")
+				}
+				return nil
+			},
+		})
+	}
+	if cdnSvc != nil {
+		health.Register(observability.HealthCheck{
+			Name: "cdn",
+			Check: func(ctx context.Context) error {
+				status, err := cdnSvc.GetStatus(ctx)
+				if err != nil {
+					return err
+				}
+				if !status.Listening {
+					return fmt.Errorf("CDN service not listening")
+				}
+				return nil
+			},
+		})
+	}
+	if routeSvc != nil {
+		health.Register(observability.HealthCheck{
+			Name: "route",
+			Check: func(ctx context.Context) error {
+				status, err := routeSvc.GetStatus(ctx)
+				if err != nil {
+					return err
+				}
+				if !status.Running {
+					return fmt.Errorf("route service not running")
+				}
+				return nil
+			},
+		})
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/healthz", health.Handler())
+	mux.Handle("/readyz", health.ReadyzHandler())
+	mux.Handle("/livez", observability.LivezHandler())
+	mux.Handle("/metrics", metrics.Handler())
+
+	srv := &http.Server{
+		Addr:         healthAddr,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		logger.Info("node health server listening", slog.String("addr", healthAddr))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("health server error", slog.String("error", err.Error()))
+		}
+	}()
+
+	return srv
 }

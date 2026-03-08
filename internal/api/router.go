@@ -151,6 +151,8 @@ func NewRouter(svc Services) http.Handler {
 
 	// Infrastructure endpoints (unauthenticated).
 	mux.Handle("/healthz", svc.Health.Handler())
+	mux.Handle("/readyz", svc.Health.ReadyzHandler())
+	mux.Handle("/livez", observability.LivezHandler())
 	mux.Handle("/metrics", svc.Metrics.Handler())
 
 	// SPA static files (catch-all for non-API routes).

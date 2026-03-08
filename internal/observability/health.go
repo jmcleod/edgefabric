@@ -108,3 +108,18 @@ func (h *HealthChecker) Handler() http.Handler {
 		json.NewEncoder(w).Encode(result)
 	})
 }
+
+// ReadyzHandler returns an http.Handler for the /readyz endpoint.
+// It delegates to Evaluate(), serving as a readiness probe for orchestrators.
+func (h *HealthChecker) ReadyzHandler() http.Handler {
+	return h.Handler() // Same logic; readiness = all checks pass.
+}
+
+// LivezHandler returns an http.Handler for the /livez endpoint.
+// It always returns 200 OK — the process is alive if it can respond.
+func LivezHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+}

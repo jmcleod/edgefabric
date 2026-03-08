@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -44,8 +46,22 @@ func RunGateway(cfg *config.Config) error {
 		}
 	}
 
+	// Start health/metrics server for Prometheus scraping and health probes.
+	healthSrv := startGatewayHealthServer(cfg.Gateway, gwRouteSvc, logger)
+
 	<-ctx.Done()
 	logger.Info("shutting down gateway")
+
+	// Shutdown health server first.
+	if healthSrv != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := healthSrv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("failed to stop health server", slog.String("error", err.Error()))
+		} else {
+			logger.Info("health server stopped")
+		}
+	}
 
 	// Graceful shutdown of gateway route forwarding.
 	if gwRouteSvc != nil {
@@ -86,6 +102,61 @@ func initGatewayRouteService(cfg config.GatewayConfig, logger *slog.Logger) gate
 		logger.Error("unknown gateway route mode, falling back to noop", slog.String("mode", mode))
 		return gatewayrt.NewNoopService()
 	}
+}
+
+// startGatewayHealthServer creates and starts an HTTP server for health checks
+// and Prometheus metrics on the gateway. Returns nil if the server fails to start.
+func startGatewayHealthServer(
+	cfg config.GatewayConfig,
+	gwRouteSvc gatewayrt.Service,
+	logger *slog.Logger,
+) *http.Server {
+	healthAddr := cfg.HealthAddr
+	if healthAddr == "" {
+		healthAddr = ":9090"
+	}
+
+	health := observability.NewHealthChecker()
+	metrics := observability.NewMetrics()
+
+	// Register health check for gateway route service.
+	if gwRouteSvc != nil {
+		health.Register(observability.HealthCheck{
+			Name: "route",
+			Check: func(ctx context.Context) error {
+				status, err := gwRouteSvc.GetStatus(ctx)
+				if err != nil {
+					return err
+				}
+				if !status.Running {
+					return fmt.Errorf("gateway route service not running")
+				}
+				return nil
+			},
+		})
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/healthz", health.Handler())
+	mux.Handle("/readyz", health.ReadyzHandler())
+	mux.Handle("/livez", observability.LivezHandler())
+	mux.Handle("/metrics", metrics.Handler())
+
+	srv := &http.Server{
+		Addr:         healthAddr,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		logger.Info("gateway health server listening", slog.String("addr", healthAddr))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("health server error", slog.String("error", err.Error()))
+		}
+	}()
+
+	return srv
 }
 
 // gatewayRouteReconcileLoop periodically polls the controller for desired route state

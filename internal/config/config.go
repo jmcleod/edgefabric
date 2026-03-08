@@ -67,6 +67,7 @@ type NodeConfig struct {
 	ControllerAddr  string      `yaml:"controller_addr"`
 	EnrollmentToken string      `yaml:"enrollment_token,omitempty"`
 	DataDir         string      `yaml:"data_dir"`
+	HealthAddr      string      `yaml:"health_addr,omitempty"` // Health/metrics server address. Default ":9090"
 	BGP             BGPConfig   `yaml:"bgp,omitempty"`
 	DNS             DNSConfig   `yaml:"dns,omitempty"`
 	CDN             CDNConfig   `yaml:"cdn,omitempty"`
@@ -106,6 +107,7 @@ type GatewayConfig struct {
 	ControllerAddr  string `yaml:"controller_addr"`
 	EnrollmentToken string `yaml:"enrollment_token,omitempty"`
 	DataDir         string `yaml:"data_dir"`
+	HealthAddr      string `yaml:"health_addr,omitempty"`  // Health/metrics server address. Default ":9090"
 	WireGuardIP     string `yaml:"wireguard_ip,omitempty"` // Gateway's overlay IP for route listeners.
 	RouteMode       string `yaml:"route_mode,omitempty"`   // "forwarder" or "noop", defaults to "noop"
 }
