@@ -1,12 +1,16 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { auditLogs } from '@/data/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuditLogs } from '@/hooks/useAudit';
 import type { AuditLogEntry } from '@/types';
 import { FileText } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 
 export default function AuditLogsPage() {
+  const { data, isLoading } = useAuditLogs();
+  const auditLogs = data?.items || [];
+
   const columns: Column<AuditLogEntry>[] = [
     {
       key: 'timestamp',
@@ -26,11 +30,11 @@ export default function AuditLogsPage() {
       render: (log) => <code className="mono-data text-primary">{log.action}</code>,
     },
     {
-      key: 'userEmail',
+      key: 'userId',
       header: 'User',
       render: (log) => (
         <div>
-          <p className="text-sm">{log.userEmail}</p>
+          <p className="text-sm mono-data">{log.userId}</p>
           <p className="text-xs text-muted-foreground mono-data">{log.ipAddress}</p>
         </div>
       ),
@@ -41,7 +45,7 @@ export default function AuditLogsPage() {
       render: (log) => (
         <div>
           <p className="text-sm">{log.resource}</p>
-          <code className="text-xs text-muted-foreground mono-data">{log.resourceId}</code>
+          {log.resourceId && <code className="text-xs text-muted-foreground mono-data">{log.resourceId}</code>}
         </div>
       ),
     },
@@ -51,7 +55,7 @@ export default function AuditLogsPage() {
       className: 'hidden xl:table-cell max-w-xs',
       render: (log) => (
         <code className="text-xs text-muted-foreground mono-data truncate block">
-          {log.details ? JSON.stringify(log.details) : '-'}
+          {log.details ? JSON.stringify(log.details) : '\u2014'}
         </code>
       ),
     },
@@ -65,12 +69,16 @@ export default function AuditLogsPage() {
         icon={FileText}
       />
 
-      <DataTable
-        data={auditLogs}
-        columns={columns}
-        searchKeys={['action', 'userEmail', 'resource', 'resourceId']}
-        pageSize={15}
-      />
+      {isLoading ? (
+        <Skeleton className="h-96" />
+      ) : (
+        <DataTable
+          data={auditLogs}
+          columns={columns}
+          searchKeys={['action', 'userId', 'resource']}
+          pageSize={15}
+        />
+      )}
     </AppLayout>
   );
 }

@@ -3,9 +3,10 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { cdnServices } from '@/data/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useCDNSites } from '@/hooks/useCDN';
 import type { CDNService } from '@/types';
-import { Layers, Eye, MoreHorizontal, Globe, HardDrive, Trash2 } from 'lucide-react';
+import { Layers, Eye, MoreHorizontal, Globe, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -17,6 +18,8 @@ import {
 
 export default function CDNServicesPage() {
   const navigate = useNavigate();
+  const { data, isLoading } = useCDNSites();
+  const cdnServices = data?.items || [];
 
   const columns: Column<CDNService>[] = [
     {
@@ -42,31 +45,6 @@ export default function CDNServicesPage() {
           <Globe className="h-3.5 w-3.5 text-muted-foreground" />
           <span>{service.domainCount}</span>
         </div>
-      ),
-    },
-    {
-      key: 'originCount',
-      header: 'Origins',
-      render: (service) => (
-        <div className="flex items-center gap-1.5">
-          <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
-          <span>{service.originCount}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'bandwidthGb',
-      header: 'Bandwidth',
-      render: (service) => (
-        <span className="tabular-nums">{service.bandwidthGb.toLocaleString()} GB</span>
-      ),
-    },
-    {
-      key: 'requestsM',
-      header: 'Requests',
-      className: 'hidden lg:table-cell',
-      render: (service) => (
-        <span className="tabular-nums">{service.requestsM}M</span>
       ),
     },
     {
@@ -108,13 +86,17 @@ export default function CDNServicesPage() {
         }}
       />
 
-      <DataTable
-        data={cdnServices}
-        columns={columns}
-        searchKeys={['name']}
-        pageSize={10}
-        onRowClick={(service) => navigate(`/tenant/cdn/services/${service.id}`)}
-      />
+      {isLoading ? (
+        <Skeleton className="h-96" />
+      ) : (
+        <DataTable
+          data={cdnServices}
+          columns={columns}
+          searchKeys={['name']}
+          pageSize={10}
+          onRowClick={(service) => navigate(`/tenant/cdn/services/${service.id}`)}
+        />
+      )}
     </AppLayout>
   );
 }

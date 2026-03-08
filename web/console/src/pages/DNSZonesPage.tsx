@@ -3,9 +3,10 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { dnsZones } from '@/data/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useDNSZones } from '@/hooks/useDNS';
 import type { DNSZone } from '@/types';
-import { Globe, Eye, MoreHorizontal, FileText } from 'lucide-react';
+import { Globe, Eye, MoreHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -17,6 +18,8 @@ import { formatDistanceToNow } from 'date-fns';
 
 export default function DNSZonesPage() {
   const navigate = useNavigate();
+  const { data, isLoading } = useDNSZones();
+  const dnsZones = data?.items || [];
 
   const columns: Column<DNSZone>[] = [
     {
@@ -33,16 +36,6 @@ export default function DNSZonesPage() {
       key: 'status',
       header: 'Status',
       render: (zone) => <StatusBadge status={zone.status} size="sm" />,
-    },
-    {
-      key: 'recordCount',
-      header: 'Records',
-      render: (zone) => (
-        <div className="flex items-center gap-1.5">
-          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-          <span>{zone.recordCount}</span>
-        </div>
-      ),
     },
     {
       key: 'lastModified',
@@ -89,13 +82,17 @@ export default function DNSZonesPage() {
         }}
       />
 
-      <DataTable
-        data={dnsZones}
-        columns={columns}
-        searchKeys={['name']}
-        pageSize={10}
-        onRowClick={(zone) => navigate(`/tenant/dns/zones/${zone.id}`)}
-      />
+      {isLoading ? (
+        <Skeleton className="h-96" />
+      ) : (
+        <DataTable
+          data={dnsZones}
+          columns={columns}
+          searchKeys={['name']}
+          pageSize={10}
+          onRowClick={(zone) => navigate(`/tenant/dns/zones/${zone.id}`)}
+        />
+      )}
     </AppLayout>
   );
 }

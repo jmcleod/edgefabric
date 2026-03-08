@@ -3,10 +3,12 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { nodes } from '@/data/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useNodes } from '@/hooks/useNodes';
 import type { Node } from '@/types';
 import { Server, Eye, MoreHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +18,8 @@ import {
 
 export default function NodesPage() {
   const navigate = useNavigate();
+  const { data, isLoading } = useNodes();
+  const nodes = data?.items || [];
 
   const columns: Column<Node>[] = [
     {
@@ -35,8 +39,7 @@ export default function NodesPage() {
         <code className="mono-data text-sm">{node.ipv4}</code>
       ),
     },
-    { key: 'location', header: 'Location' },
-    { key: 'region', header: 'Region', className: 'hidden lg:table-cell' },
+    { key: 'region', header: 'Region' },
     {
       key: 'status',
       header: 'Status',
@@ -49,21 +52,16 @@ export default function NodesPage() {
       render: (node) => <code className="mono-data text-xs">{node.version}</code>,
     },
     {
-      key: 'metrics',
-      header: 'CPU / Mem',
+      key: 'lastSeen',
+      header: 'Last Seen',
       className: 'hidden lg:table-cell',
       render: (node) => (
-        <div className="text-sm tabular-nums">
-          <span className={node.cpu > 80 ? 'text-status-warning font-medium' : ''}>{node.cpu}%</span>
-          {' / '}
-          <span className={node.memory > 80 ? 'text-status-warning font-medium' : ''}>{node.memory}%</span>
-        </div>
+        <span className="text-muted-foreground text-sm">
+          {node.lastSeen
+            ? formatDistanceToNow(new Date(node.lastSeen), { addSuffix: true })
+            : '\u2014'}
+        </span>
       ),
-    },
-    {
-      key: 'uptime',
-      header: 'Uptime',
-      className: 'hidden xl:table-cell',
     },
     {
       key: 'actions',
@@ -93,7 +91,7 @@ export default function NodesPage() {
     <AppLayout breadcrumbs={[{ label: 'Infrastructure' }, { label: 'Nodes' }]}>
       <PageHeader
         title="Nodes"
-        description={`${nodes.length} nodes across all regions`}
+        description={`${data?.total ?? 0} nodes across all regions`}
         icon={Server}
         action={{
           label: 'Add Node',
@@ -101,13 +99,17 @@ export default function NodesPage() {
         }}
       />
 
-      <DataTable
-        data={nodes}
-        columns={columns}
-        searchKeys={['name', 'hostname', 'ipv4', 'location', 'region']}
-        pageSize={10}
-        onRowClick={(node) => navigate(`/nodes/${node.id}`)}
-      />
+      {isLoading ? (
+        <Skeleton className="h-96" />
+      ) : (
+        <DataTable
+          data={nodes}
+          columns={columns}
+          searchKeys={['name', 'hostname', 'ipv4', 'region']}
+          pageSize={10}
+          onRowClick={(node) => navigate(`/nodes/${node.id}`)}
+        />
+      )}
     </AppLayout>
   );
 }

@@ -1,34 +1,54 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { StatCard } from '@/components/ui/StatCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
-import { nodes, bgpPeers, wireguardPeers } from '@/data/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useNode } from '@/hooks/useNodes';
+import { useBGPSessions } from '@/hooks/useBGP';
+import { useWireGuardPeers } from '@/hooks/useWireGuard';
 import {
   Server,
   ArrowLeft,
   RefreshCw,
   Terminal,
   Power,
-  Cpu,
-  HardDrive,
   Clock,
-  Globe,
   Radio,
   Shield,
+  Tag,
+  Globe,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function NodeDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const node = nodes.find((n) => n.id === id);
+  const { data: node, isLoading, error } = useNode(id);
+  const { data: bgpData } = useBGPSessions(id);
+  const { data: wgData } = useWireGuardPeers(id);
 
-  if (!node) {
+  const nodeBgpPeers = bgpData?.items || [];
+  const nodeWgPeers = wgData?.items || [];
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <Skeleton className="h-12 w-64 mb-6" />
+        <div className="grid gap-4 md:grid-cols-4 mb-6">
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
+        </div>
+        <Skeleton className="h-96" />
+      </AppLayout>
+    );
+  }
+
+  if (!node || error) {
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center h-[50vh] text-center">
@@ -40,9 +60,6 @@ export default function NodeDetailPage() {
       </AppLayout>
     );
   }
-
-  const nodeBgpPeers = bgpPeers.filter((p) => p.nodeId === node.id);
-  const nodeWgPeers = wireguardPeers.filter((p) => p.nodeId === node.id);
 
   return (
     <AppLayout
@@ -86,10 +103,16 @@ export default function NodeDetailPage() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4 mb-6">
-        <StatCard title="CPU Usage" value={`${node.cpu}%`} icon={Cpu} variant={node.cpu > 80 ? 'warning' : 'default'} />
-        <StatCard title="Memory" value={`${node.memory}%`} icon={HardDrive} variant={node.memory > 80 ? 'warning' : 'default'} />
+        <StatCard title="Region" value={node.region} icon={Globe} />
+        <StatCard title="Version" value={node.version} icon={Tag} />
         <StatCard title="Uptime" value={node.uptime} icon={Clock} />
-        <StatCard title="Version" value={node.version} icon={Server} />
+        <StatCard
+          title="Last Seen"
+          value={node.lastSeen
+            ? formatDistanceToNow(new Date(node.lastSeen), { addSuffix: true })
+            : '\u2014'}
+          icon={Server}
+        />
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
@@ -108,32 +131,27 @@ export default function NodeDetailPage() {
               <CardContent className="space-y-3">
                 <InfoRow label="Hostname" value={node.hostname} mono />
                 <InfoRow label="IPv4 Address" value={node.ipv4} mono />
-                {node.ipv6 && <InfoRow label="IPv6 Address" value={node.ipv6} mono />}
+                {node.ipv6 && <InfoRow label="IPv6 / WireGuard IP" value={node.ipv6} mono />}
                 <InfoRow label="Location" value={node.location} />
                 <InfoRow label="Region" value={node.region} />
-                <InfoRow label="Last Seen" value={formatDistanceToNow(new Date(node.lastSeen), { addSuffix: true })} />
+                <InfoRow label="Last Seen" value={
+                  node.lastSeen
+                    ? formatDistanceToNow(new Date(node.lastSeen), { addSuffix: true })
+                    : '\u2014'
+                } />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Resource Usage</CardTitle>
+                <CardTitle className="text-base">Metadata</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-muted-foreground">CPU</span>
-                    <span className={node.cpu > 80 ? 'text-status-warning font-medium' : ''}>{node.cpu}%</span>
-                  </div>
-                  <Progress value={node.cpu} className="h-2" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-muted-foreground">Memory</span>
-                    <span className={node.memory > 80 ? 'text-status-warning font-medium' : ''}>{node.memory}%</span>
-                  </div>
-                  <Progress value={node.memory} className="h-2" />
-                </div>
+              <CardContent className="space-y-3">
+                <InfoRow label="Node ID" value={node.id} mono />
+                <InfoRow label="Version" value={node.version} />
+                <InfoRow label="Uptime" value={node.uptime} />
+                {node.tenantId && <InfoRow label="Tenant ID" value={node.tenantId} mono />}
+                {node.nodeGroupId && <InfoRow label="Node Group" value={node.nodeGroupId} mono />}
               </CardContent>
             </Card>
           </div>
@@ -159,7 +177,7 @@ export default function NodeDetailPage() {
                           <code className="mono-data text-sm">{peer.peerIp}</code>
                           <p className="text-xs text-muted-foreground">AS{peer.peerAsn}</p>
                         </div>
-                        <StatusBadge status={peer.status} size="sm" />
+                        <StatusBadge status={peer.status === 'established' ? 'healthy' : 'warning'} size="sm" />
                       </div>
                     ))}
                   </div>
@@ -183,8 +201,7 @@ export default function NodeDetailPage() {
                       <div key={peer.id} className="p-3 rounded-lg bg-muted/30">
                         <code className="mono-data text-xs block truncate">{peer.publicKey}</code>
                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                          <span>↓ {(peer.rxBytes / 1e6).toFixed(0)} MB</span>
-                          <span>↑ {(peer.txBytes / 1e6).toFixed(0)} MB</span>
+                          <span>Endpoint: {peer.endpoint}</span>
                         </div>
                       </div>
                     ))}
@@ -202,12 +219,9 @@ export default function NodeDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="bg-muted/30 rounded-lg p-4 font-mono text-xs space-y-1 max-h-80 overflow-auto">
-                <p className="text-muted-foreground">[2024-03-08 09:59:45] INFO: Health check passed</p>
-                <p className="text-muted-foreground">[2024-03-08 09:55:00] INFO: BGP session established with 169.254.169.1</p>
-                <p className="text-muted-foreground">[2024-03-08 09:50:00] INFO: WireGuard handshake completed</p>
-                <p className="text-muted-foreground">[2024-03-08 09:45:00] INFO: Configuration reload successful</p>
-                <p className="text-status-warning">[2024-03-08 09:40:00] WARN: High memory usage detected (82%)</p>
-                <p className="text-muted-foreground">[2024-03-08 09:30:00] INFO: Service started</p>
+                <p className="text-muted-foreground text-center py-8">
+                  Log streaming not yet available. Logs will appear here once the log aggregation endpoint is implemented.
+                </p>
               </div>
             </CardContent>
           </Card>

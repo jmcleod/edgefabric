@@ -3,9 +3,10 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { gateways } from '@/data/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useGateways } from '@/hooks/useGateways';
 import type { Gateway } from '@/types';
-import { Waypoints, Eye, MoreHorizontal, Server } from 'lucide-react';
+import { Waypoints, Eye, MoreHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -17,6 +18,8 @@ import { formatDistanceToNow } from 'date-fns';
 
 export default function GatewaysPage() {
   const navigate = useNavigate();
+  const { data, isLoading } = useGateways();
+  const gateways = data?.items || [];
 
   const columns: Column<Gateway>[] = [
     {
@@ -25,38 +28,23 @@ export default function GatewaysPage() {
       render: (gw) => (
         <div>
           <p className="font-medium text-foreground">{gw.name}</p>
-          <p className="text-xs text-muted-foreground">{gw.hostname}</p>
+          <p className="text-xs text-muted-foreground mono-data">{gw.publicIp}</p>
         </div>
       ),
     },
-    {
-      key: 'publicIp',
-      header: 'Public IP',
-      render: (gw) => <code className="mono-data text-sm">{gw.publicIp}</code>,
-    },
-    { key: 'location', header: 'Location' },
     {
       key: 'status',
       header: 'Status',
       render: (gw) => <StatusBadge status={gw.status} size="sm" />,
     },
     {
-      key: 'connectedNodes',
-      header: 'Connected Nodes',
-      render: (gw) => (
-        <div className="flex items-center gap-1.5">
-          <Server className="h-3.5 w-3.5 text-muted-foreground" />
-          <span>{gw.connectedNodes}</span>
-        </div>
-      ),
-    },
-    {
       key: 'lastSeen',
       header: 'Last Seen',
-      className: 'hidden lg:table-cell',
       render: (gw) => (
         <span className="text-muted-foreground text-sm">
-          {formatDistanceToNow(new Date(gw.lastSeen), { addSuffix: true })}
+          {gw.lastSeen
+            ? formatDistanceToNow(new Date(gw.lastSeen), { addSuffix: true })
+            : '\u2014'}
         </span>
       ),
     },
@@ -96,13 +84,17 @@ export default function GatewaysPage() {
         }}
       />
 
-      <DataTable
-        data={gateways}
-        columns={columns}
-        searchKeys={['name', 'hostname', 'publicIp', 'location']}
-        pageSize={10}
-        onRowClick={(gw) => navigate(`/gateways/${gw.id}`)}
-      />
+      {isLoading ? (
+        <Skeleton className="h-96" />
+      ) : (
+        <DataTable
+          data={gateways}
+          columns={columns}
+          searchKeys={['name', 'publicIp']}
+          pageSize={10}
+          onRowClick={(gw) => navigate(`/gateways/${gw.id}`)}
+        />
+      )}
     </AppLayout>
   );
 }
