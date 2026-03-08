@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmcleod/edgefabric/internal/bgp"
+	"github.com/jmcleod/edgefabric/internal/cdnserver"
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/dnsserver"
 	"github.com/jmcleod/edgefabric/internal/observability"
@@ -23,6 +24,7 @@ func RunNode(cfg *config.Config) error {
 		slog.String("controller_addr", cfg.Node.ControllerAddr),
 		slog.Bool("bgp_enabled", cfg.Node.BGP.Enabled),
 		slog.Bool("dns_enabled", cfg.Node.DNS.Enabled),
+		slog.Bool("cdn_enabled", cfg.Node.CDN.Enabled),
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -81,10 +83,45 @@ func RunNode(cfg *config.Config) error {
 		}
 	}
 
+	// Initialize CDN service if enabled.
+	var cdnSvc cdnserver.Service
+	if cfg.Node.CDN.Enabled {
+		cdnSvc = initCDNService(cfg.Node.CDN, logger)
+		if cdnSvc != nil {
+			listenAddr := cfg.Node.CDN.ListenAddr
+			if listenAddr == "" {
+				listenAddr = ":8080"
+			}
+
+			if err := cdnSvc.Start(ctx, listenAddr); err != nil {
+				logger.Error("failed to start CDN service", slog.String("error", err.Error()))
+			} else {
+				logger.Info("CDN service started",
+					slog.String("listen_addr", listenAddr),
+					slog.String("mode", cfg.Node.CDN.Mode),
+				)
+
+				// Start CDN reconciliation loop.
+				go cdnReconcileLoop(ctx, cdnSvc, cfg.Node.ControllerAddr, logger)
+			}
+		}
+	}
+
 	// TODO: Connect to controller over WireGuard.
 
 	<-ctx.Done()
 	logger.Info("shutting down node")
+
+	// Graceful shutdown of CDN (before DNS and BGP).
+	if cdnSvc != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := cdnSvc.Stop(shutdownCtx); err != nil {
+			logger.Error("failed to stop CDN service", slog.String("error", err.Error()))
+		} else {
+			logger.Info("CDN service stopped")
+		}
+	}
 
 	// Graceful shutdown of DNS.
 	if dnsSvc != nil {
@@ -187,6 +224,47 @@ func dnsReconcileLoop(ctx context.Context, svc dnsserver.Service, controllerAddr
 			// and call svc.Reconcile(ctx, config).
 			// For now, just log that reconciliation would happen.
 			logger.Debug("DNS reconciliation tick",
+				slog.String("controller", controllerAddr),
+			)
+		}
+	}
+}
+
+// initCDNService creates the appropriate CDN service based on config mode.
+func initCDNService(cfg config.CDNConfig, logger *slog.Logger) cdnserver.Service {
+	mode := cfg.Mode
+	if mode == "" {
+		mode = "noop"
+	}
+
+	switch mode {
+	case "proxy":
+		logger.Info("using reverse proxy CDN service")
+		return cdnserver.NewProxyService(logger)
+	case "noop":
+		logger.Info("using noop CDN service (demo mode)")
+		return cdnserver.NewNoopService()
+	default:
+		logger.Error("unknown CDN mode, falling back to noop", slog.String("mode", mode))
+		return cdnserver.NewNoopService()
+	}
+}
+
+// cdnReconcileLoop periodically polls the controller for desired CDN state
+// and reconciles the local CDN service to match. Runs every 30 seconds.
+func cdnReconcileLoop(ctx context.Context, svc cdnserver.Service, controllerAddr string, logger *slog.Logger) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// TODO: Poll GET /api/v1/nodes/{id}/config/cdn from controller
+			// and call svc.Reconcile(ctx, config).
+			// For now, just log that reconciliation would happen.
+			logger.Debug("CDN reconciliation tick",
 				slog.String("controller", controllerAddr),
 			)
 		}

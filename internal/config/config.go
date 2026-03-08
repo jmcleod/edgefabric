@@ -69,6 +69,7 @@ type NodeConfig struct {
 	DataDir         string    `yaml:"data_dir"`
 	BGP             BGPConfig `yaml:"bgp,omitempty"`
 	DNS             DNSConfig `yaml:"dns,omitempty"`
+	CDN             CDNConfig `yaml:"cdn,omitempty"`
 }
 
 // BGPConfig holds BGP runtime settings for a node.
@@ -84,6 +85,13 @@ type DNSConfig struct {
 	Enabled    bool   `yaml:"enabled"`
 	ListenAddr string `yaml:"listen_addr,omitempty"` // Default ":5353"
 	Mode       string `yaml:"mode,omitempty"`        // "miekg" or "noop", defaults to "noop"
+}
+
+// CDNConfig holds CDN runtime settings for a node.
+type CDNConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	ListenAddr string `yaml:"listen_addr,omitempty"` // Default ":8080"
+	Mode       string `yaml:"mode,omitempty"`        // "proxy" or "noop", defaults to "noop"
 }
 
 // GatewayConfig holds gateway-specific settings.
