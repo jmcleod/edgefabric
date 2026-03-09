@@ -60,7 +60,7 @@ attempts=0
 ADMIN_PASSWORD=""
 while [ -z "$ADMIN_PASSWORD" ]; do
   if [ -f /shared/startup.log ]; then
-    ADMIN_PASSWORD=$(grep -o 'password=[^ ]*' /shared/startup.log | head -1 | cut -d= -f2 || true)
+    ADMIN_PASSWORD=$(grep 'seed superuser created' /shared/startup.log | head -1 | jq -r '.password' 2>/dev/null || true)
   fi
   if [ -z "$ADMIN_PASSWORD" ]; then
     attempts=$((attempts + 1))
