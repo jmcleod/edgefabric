@@ -28,6 +28,14 @@ import ProvisioningJobsPage from "./pages/ProvisioningJobsPage";
 import SSHKeysPage from "./pages/SSHKeysPage";
 import APIKeysPage from "./pages/APIKeysPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import TenantDashboardPage from "./pages/tenant/TenantDashboardPage";
+import TenantNodesPage from "./pages/tenant/TenantNodesPage";
+import TenantNodeGroupsPage from "./pages/tenant/TenantNodeGroupsPage";
+import TenantDNSRecordsPage from "./pages/tenant/TenantDNSRecordsPage";
+import TenantCDNDomainsPage from "./pages/tenant/TenantCDNDomainsPage";
+import TenantCDNOriginsPage from "./pages/tenant/TenantCDNOriginsPage";
+import TenantCDNCachePage from "./pages/tenant/TenantCDNCachePage";
+import TenantAuditPage from "./pages/tenant/TenantAuditPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -69,13 +77,21 @@ const App = () => (
               <Route path="/audit" element={<RequireAuth><AuditLogsPage /></RequireAuth>} />
 
               {/* Tenant-scoped routes */}
+              <Route path="/tenant/dashboard" element={<RequireAuth><TenantDashboardPage /></RequireAuth>} />
+              <Route path="/tenant/nodes" element={<RequireAuth><TenantNodesPage /></RequireAuth>} />
+              <Route path="/tenant/node-groups" element={<RequireAuth><TenantNodeGroupsPage /></RequireAuth>} />
               <Route path="/tenant/dns/zones" element={<RequireAuth><DNSZonesPage /></RequireAuth>} />
               <Route path="/tenant/dns/zones/:id" element={<RequireAuth><DNSZoneDetailPage /></RequireAuth>} />
+              <Route path="/tenant/dns/records" element={<RequireAuth><TenantDNSRecordsPage /></RequireAuth>} />
               <Route path="/tenant/cdn/services" element={<RequireAuth><CDNServicesPage /></RequireAuth>} />
               <Route path="/tenant/cdn/services/:id" element={<RequireAuth><CDNSiteDetailPage /></RequireAuth>} />
+              <Route path="/tenant/cdn/domains" element={<RequireAuth><TenantCDNDomainsPage /></RequireAuth>} />
+              <Route path="/tenant/cdn/origins" element={<RequireAuth><TenantCDNOriginsPage /></RequireAuth>} />
+              <Route path="/tenant/cdn/cache" element={<RequireAuth><TenantCDNCachePage /></RequireAuth>} />
               <Route path="/tenant/routes" element={<RequireAuth><RoutesPage /></RequireAuth>} />
               <Route path="/tenant/routes/:id" element={<RequireAuth><RouteDetailPage /></RequireAuth>} />
               <Route path="/tenant/api-keys" element={<RequireAuth><APIKeysPage /></RequireAuth>} />
+              <Route path="/tenant/audit" element={<RequireAuth><TenantAuditPage /></RequireAuth>} />
 
               {/* Placeholder routes — will be replaced in later phases */}
               <Route path="/fleet-health" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
