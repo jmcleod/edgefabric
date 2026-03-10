@@ -97,7 +97,7 @@ func (m *mockFleetService) CreateGateway(_ context.Context, _ fleet.CreateGatewa
 func (m *mockFleetService) GetGateway(_ context.Context, _ domain.ID) (*domain.Gateway, error) {
 	return nil, storage.ErrNotFound
 }
-func (m *mockFleetService) ListGateways(_ context.Context, _ domain.ID, _ storage.ListParams) ([]*domain.Gateway, int, error) {
+func (m *mockFleetService) ListGateways(_ context.Context, _ *domain.ID, _ storage.ListParams) ([]*domain.Gateway, int, error) {
 	return nil, 0, nil
 }
 func (m *mockFleetService) UpdateGateway(_ context.Context, _ domain.ID, _ fleet.UpdateGatewayRequest) (*domain.Gateway, error) {

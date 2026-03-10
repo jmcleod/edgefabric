@@ -139,46 +139,17 @@ func (h *StatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Gateway count + breakdown by status.
-	// ListGateways requires a non-pointer tenantID. For superuser (no tenant filter),
-	// iterate over tenants to aggregate. For tenant-scoped users, query directly.
-	if tenantFilter != nil {
-		gateways, gwTotal, err := h.fleetSvc.ListGateways(r.Context(), *tenantFilter, storage.ListParams{Limit: 200})
-		if err != nil {
-			slog.Warn("status: failed to list gateways", slog.String("error", err.Error()))
-		} else {
-			resp.GatewayCount = gwTotal
-			for _, gw := range gateways {
-				resp.GatewaysByStatus[string(gw.Status)]++
-				if gw.Status == domain.GatewayStatusOnline {
-					if gw.LastConfigSync == nil || gw.LastConfigSync.Before(staleThreshold) {
-						resp.StaleGatewayCount++
-					}
-				}
-			}
-		}
+	// ListGateways now accepts *domain.ID — nil lists all (superuser), non-nil filters by tenant.
+	gateways, gwTotal, err := h.fleetSvc.ListGateways(r.Context(), tenantFilter, storage.ListParams{Limit: 200})
+	if err != nil {
+		slog.Warn("status: failed to list gateways", slog.String("error", err.Error()))
 	} else {
-		// Superuser: iterate tenants.
-		tenants, _, err := h.tenantSvc.List(r.Context(), storage.ListParams{Limit: 200})
-		if err != nil {
-			slog.Warn("status: failed to list tenants for gateway aggregation", slog.String("error", err.Error()))
-		} else {
-			for _, t := range tenants {
-				gateways, gwTotal, err := h.fleetSvc.ListGateways(r.Context(), t.ID, storage.ListParams{Limit: 200})
-				if err != nil {
-					slog.Warn("status: failed to list gateways for tenant",
-						slog.String("tenant_id", t.ID.String()),
-						slog.String("error", err.Error()),
-					)
-					continue
-				}
-				resp.GatewayCount += gwTotal
-				for _, gw := range gateways {
-					resp.GatewaysByStatus[string(gw.Status)]++
-					if gw.Status == domain.GatewayStatusOnline {
-						if gw.LastConfigSync == nil || gw.LastConfigSync.Before(staleThreshold) {
-							resp.StaleGatewayCount++
-						}
-					}
+		resp.GatewayCount = gwTotal
+		for _, gw := range gateways {
+			resp.GatewaysByStatus[string(gw.Status)]++
+			if gw.Status == domain.GatewayStatusOnline {
+				if gw.LastConfigSync == nil || gw.LastConfigSync.Before(staleThreshold) {
+					resp.StaleGatewayCount++
 				}
 			}
 		}

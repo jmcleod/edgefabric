@@ -121,7 +121,7 @@ type NodeGroupStore interface {
 type GatewayStore interface {
 	CreateGateway(ctx context.Context, g *domain.Gateway) error
 	GetGateway(ctx context.Context, id domain.ID) (*domain.Gateway, error)
-	ListGateways(ctx context.Context, tenantID domain.ID, params ListParams) ([]*domain.Gateway, int, error)
+	ListGateways(ctx context.Context, tenantID *domain.ID, params ListParams) ([]*domain.Gateway, int, error)
 	UpdateGateway(ctx context.Context, g *domain.Gateway) error
 	DeleteGateway(ctx context.Context, id domain.ID) error
 	UpdateGatewayHeartbeat(ctx context.Context, id domain.ID) error

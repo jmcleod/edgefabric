@@ -97,9 +97,9 @@ export function transformTenant(api: ApiTenant): Tenant {
     slug: api.slug,
     status: api.status === 'deleted' ? 'suspended' : api.status as 'active' | 'suspended' | 'pending',
     createdAt: api.created_at,
-    nodeCount: 0,       // Computed aggregate — not in backend
-    zoneCount: 0,       // Computed aggregate — not in backend
-    cdnServiceCount: 0, // Computed aggregate — not in backend
+    nodeCount: 0,       // Loaded separately via useTenantStats
+    zoneCount: 0,       // Loaded separately via useTenantStats
+    cdnServiceCount: 0, // Loaded separately via useTenantStats
   };
 }
 

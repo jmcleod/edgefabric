@@ -289,6 +289,16 @@ func initDNSService(cfg config.DNSConfig, logger *slog.Logger) dnsserver.Service
 // bgpReconcileLoop periodically polls the controller for desired BGP state
 // and reconciles the local BGP service to match. Runs every 30 seconds.
 func bgpReconcileLoop(ctx context.Context, svc bgp.Service, client *nodeclient.Client, logger *slog.Logger) {
+	// Immediate first reconciliation — don't wait 30s.
+	sessions, err := client.FetchBGPConfig(ctx)
+	if err != nil {
+		logger.Warn("BGP initial config fetch failed", slog.String("error", err.Error()))
+	} else if err := svc.Reconcile(ctx, sessions); err != nil {
+		logger.Warn("BGP initial reconciliation failed", slog.String("error", err.Error()))
+	} else {
+		logger.Info("BGP initial reconciliation complete", slog.Int("sessions", len(sessions)))
+	}
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -314,6 +324,16 @@ func bgpReconcileLoop(ctx context.Context, svc bgp.Service, client *nodeclient.C
 // dnsReconcileLoop periodically polls the controller for desired DNS state
 // and reconciles the local DNS service to match. Runs every 30 seconds.
 func dnsReconcileLoop(ctx context.Context, svc dnsserver.Service, client *nodeclient.Client, logger *slog.Logger) {
+	// Immediate first reconciliation — don't wait 30s.
+	dnsCfg, err := client.FetchDNSConfig(ctx)
+	if err != nil {
+		logger.Warn("DNS initial config fetch failed", slog.String("error", err.Error()))
+	} else if err := svc.Reconcile(ctx, dnsCfg); err != nil {
+		logger.Warn("DNS initial reconciliation failed", slog.String("error", err.Error()))
+	} else {
+		logger.Info("DNS initial reconciliation complete", slog.Int("zones", len(dnsCfg.Zones)))
+	}
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -359,6 +379,16 @@ func initCDNService(cfg config.CDNConfig, logger *slog.Logger) cdnserver.Service
 // cdnReconcileLoop periodically polls the controller for desired CDN state
 // and reconciles the local CDN service to match. Runs every 30 seconds.
 func cdnReconcileLoop(ctx context.Context, svc cdnserver.Service, client *nodeclient.Client, logger *slog.Logger) {
+	// Immediate first reconciliation — don't wait 30s.
+	cdnCfg, err := client.FetchCDNConfig(ctx)
+	if err != nil {
+		logger.Warn("CDN initial config fetch failed", slog.String("error", err.Error()))
+	} else if err := svc.Reconcile(ctx, cdnCfg); err != nil {
+		logger.Warn("CDN initial reconciliation failed", slog.String("error", err.Error()))
+	} else {
+		logger.Info("CDN initial reconciliation complete", slog.Int("sites", len(cdnCfg.Sites)))
+	}
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -404,6 +434,16 @@ func initRouteService(cfg config.RouteConfig, logger *slog.Logger) routeserver.S
 // routeReconcileLoop periodically polls the controller for desired route state
 // and reconciles the local route forwarding service to match. Runs every 30 seconds.
 func routeReconcileLoop(ctx context.Context, svc routeserver.Service, client *nodeclient.Client, logger *slog.Logger) {
+	// Immediate first reconciliation — don't wait 30s.
+	rtCfg, err := client.FetchRouteConfig(ctx)
+	if err != nil {
+		logger.Warn("route initial config fetch failed", slog.String("error", err.Error()))
+	} else if err := svc.Reconcile(ctx, rtCfg); err != nil {
+		logger.Warn("route initial reconciliation failed", slog.String("error", err.Error()))
+	} else {
+		logger.Info("route initial reconciliation complete", slog.Int("routes", len(rtCfg.Routes)))
+	}
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 

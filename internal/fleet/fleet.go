@@ -179,7 +179,7 @@ func (s *DefaultService) GetGateway(ctx context.Context, id domain.ID) (*domain.
 	return s.gateways.GetGateway(ctx, id)
 }
 
-func (s *DefaultService) ListGateways(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.Gateway, int, error) {
+func (s *DefaultService) ListGateways(ctx context.Context, tenantID *domain.ID, params storage.ListParams) ([]*domain.Gateway, int, error) {
 	return s.gateways.ListGateways(ctx, tenantID, params)
 }
 

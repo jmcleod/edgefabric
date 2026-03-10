@@ -182,18 +182,11 @@ func RunController(cfg *config.Config) error {
 		if err == nil {
 			m.ActiveTenants.Set(float64(tCount))
 		}
-		// Sum gateway counts across all tenants.
-		var gatewayTotal int
-		tenants, _, err := tenantSvc.List(context.Background(), storage.ListParams{Limit: 200})
+		// Gateway count (nil tenant = all gateways).
+		_, gatewayTotal, err := fleetSvc.ListGateways(context.Background(), nil, storage.ListParams{Limit: 1})
 		if err == nil {
-			for _, t := range tenants {
-				_, gCount, err := fleetSvc.ListGateways(context.Background(), t.ID, storage.ListParams{Limit: 1})
-				if err == nil {
-					gatewayTotal += gCount
-				}
-			}
+			m.ActiveGateways.Set(float64(gatewayTotal))
 		}
-		m.ActiveGateways.Set(float64(gatewayTotal))
 	})
 
 	// Assemble API router.

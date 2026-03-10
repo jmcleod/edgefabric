@@ -21,7 +21,7 @@ type Service interface {
 	// Gateways
 	CreateGateway(ctx context.Context, req CreateGatewayRequest) (*domain.Gateway, error)
 	GetGateway(ctx context.Context, id domain.ID) (*domain.Gateway, error)
-	ListGateways(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.Gateway, int, error)
+	ListGateways(ctx context.Context, tenantID *domain.ID, params storage.ListParams) ([]*domain.Gateway, int, error)
 	UpdateGateway(ctx context.Context, id domain.ID, req UpdateGatewayRequest) (*domain.Gateway, error)
 	DeleteGateway(ctx context.Context, id domain.ID) error
 	RecordGatewayHeartbeat(ctx context.Context, id domain.ID) error

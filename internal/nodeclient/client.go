@@ -59,9 +59,16 @@ func Enroll(ctx context.Context, controllerURL, enrollmentToken string) (*Enroll
 		return nil, fmt.Errorf("enrollment failed (HTTP %d): %s", resp.StatusCode, data)
 	}
 
-	var result EnrollResult
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	var envelope apiEnvelope
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
 		return nil, fmt.Errorf("decode enrollment response: %w", err)
+	}
+	if len(envelope.Data) == 0 {
+		return nil, fmt.Errorf("empty data in enrollment response")
+	}
+	var result EnrollResult
+	if err := json.Unmarshal(envelope.Data, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal enrollment data: %w", err)
 	}
 	return &result, nil
 }
@@ -72,6 +79,12 @@ type EnrollResult struct {
 	NodeID      string `json:"node_id"`
 	APIToken    string `json:"api_token"`
 	WireGuardIP string `json:"wireguard_ip"`
+}
+
+// apiEnvelope unwraps the standard {data: ...} response envelope used by
+// all controller API endpoints (via apiutil.JSON).
+type apiEnvelope struct {
+	Data json.RawMessage `json:"data"`
 }
 
 // FetchBGPConfig polls GET /api/v1/nodes/{id}/config/bgp.
@@ -129,8 +142,15 @@ func (c *Client) getJSON(ctx context.Context, path string, dst any) error {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, data)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {
+	var envelope apiEnvelope
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
 		return fmt.Errorf("decode response: %w", err)
+	}
+	if len(envelope.Data) == 0 {
+		return fmt.Errorf("empty data in response")
+	}
+	if err := json.Unmarshal(envelope.Data, dst); err != nil {
+		return fmt.Errorf("unmarshal data: %w", err)
 	}
 	return nil
 }

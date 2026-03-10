@@ -45,7 +45,7 @@ func TestGatewayCRUD(t *testing.T) {
 	}
 
 	// List by tenant.
-	gateways, total, err := store.ListGateways(ctx, tenantID, storage.ListParams{Limit: 10})
+	gateways, total, err := store.ListGateways(ctx, &tenantID, storage.ListParams{Limit: 10})
 	if err != nil {
 		t.Fatalf("list gateways: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestGatewayListEmpty(t *testing.T) {
 
 	tenantID := createTestTenant(t, store)
 
-	gateways, total, err := store.ListGateways(ctx, tenantID, storage.ListParams{Limit: 10})
+	gateways, total, err := store.ListGateways(ctx, &tenantID, storage.ListParams{Limit: 10})
 	if err != nil {
 		t.Fatalf("list gateways: %v", err)
 	}

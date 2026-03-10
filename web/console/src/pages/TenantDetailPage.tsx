@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { useTenant, useUpdateTenant, useDeleteTenant } from '@/hooks/useTenants';
+import { useTenant, useTenantStats, useUpdateTenant, useDeleteTenant } from '@/hooks/useTenants';
 import { tenantSchema, type TenantFormData } from '@/lib/schemas';
 import { Building2, ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 
@@ -24,6 +24,7 @@ export default function TenantDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: tenant, isLoading, error } = useTenant(id);
+  const { data: stats } = useTenantStats(id);
   const updateTenant = useUpdateTenant();
   const deleteTenant = useDeleteTenant();
 
@@ -111,9 +112,9 @@ export default function TenantDetailPage() {
             <CardTitle className="text-base">Resource Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <InfoRow label="Assigned Nodes" value={String(tenant.nodeCount)} />
-            <InfoRow label="DNS Zones" value={String(tenant.zoneCount)} />
-            <InfoRow label="CDN Services" value={String(tenant.cdnServiceCount)} />
+            <InfoRow label="Assigned Nodes" value={String(stats?.nodeCount ?? tenant.nodeCount)} />
+            <InfoRow label="DNS Zones" value={String(stats?.zoneCount ?? tenant.zoneCount)} />
+            <InfoRow label="CDN Services" value={String(stats?.cdnServiceCount ?? tenant.cdnServiceCount)} />
           </CardContent>
         </Card>
       </div>

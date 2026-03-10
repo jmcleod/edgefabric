@@ -7,6 +7,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/api/apiutil"
 	"github.com/jmcleod/edgefabric/internal/api/middleware"
 	"github.com/jmcleod/edgefabric/internal/audit"
+	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/fleet"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/storage"
@@ -97,14 +98,13 @@ func (h *GatewayHandler) List(w http.ResponseWriter, r *http.Request) {
 	params := apiutil.ParseListParams(r)
 	claims := middleware.ClaimsFromContext(r.Context())
 
-	// Use tenant from claims for non-superuser.
-	tenantID := claims.TenantID
-	if tenantID == nil {
-		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", "tenant_id required")
-		return
+	// Superuser sees all gateways; tenant users see only theirs.
+	var tenantFilter *domain.ID
+	if claims.TenantID != nil {
+		tenantFilter = claims.TenantID
 	}
 
-	gateways, total, err := h.svc.ListGateways(r.Context(), *tenantID, params)
+	gateways, total, err := h.svc.ListGateways(r.Context(), tenantFilter, params)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to list gateways")
 		return

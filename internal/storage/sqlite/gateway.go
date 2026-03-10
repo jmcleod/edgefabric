@@ -62,24 +62,43 @@ func (s *SQLiteStore) GetGateway(ctx context.Context, id domain.ID) (*domain.Gat
 	return g, nil
 }
 
-func (s *SQLiteStore) ListGateways(ctx context.Context, tenantID domain.ID, params storage.ListParams) ([]*domain.Gateway, int, error) {
+func (s *SQLiteStore) ListGateways(ctx context.Context, tenantID *domain.ID, params storage.ListParams) ([]*domain.Gateway, int, error) {
 	if params.Limit <= 0 {
 		params.Limit = storage.DefaultLimit
 	}
 
 	var total int
-	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM gateways WHERE tenant_id = ?`, tenantID.String(),
-	).Scan(&total)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count gateways: %w", err)
+	if tenantID != nil {
+		err := s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM gateways WHERE tenant_id = ?`, tenantID.String(),
+		).Scan(&total)
+		if err != nil {
+			return nil, 0, fmt.Errorf("count gateways: %w", err)
+		}
+	} else {
+		err := s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM gateways`,
+		).Scan(&total)
+		if err != nil {
+			return nil, 0, fmt.Errorf("count gateways: %w", err)
+		}
 	}
 
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, tenant_id, name, public_ip, wireguard_ip, status, enrollment_token, last_heartbeat, last_config_sync, metadata, created_at, updated_at
-		 FROM gateways WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		tenantID.String(), params.Limit, params.Offset,
-	)
+	var rows *sql.Rows
+	var err error
+	if tenantID != nil {
+		rows, err = s.db.QueryContext(ctx,
+			`SELECT id, tenant_id, name, public_ip, wireguard_ip, status, enrollment_token, last_heartbeat, last_config_sync, metadata, created_at, updated_at
+			 FROM gateways WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			tenantID.String(), params.Limit, params.Offset,
+		)
+	} else {
+		rows, err = s.db.QueryContext(ctx,
+			`SELECT id, tenant_id, name, public_ip, wireguard_ip, status, enrollment_token, last_heartbeat, last_config_sync, metadata, created_at, updated_at
+			 FROM gateways ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			params.Limit, params.Offset,
+		)
+	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("list gateways: %w", err)
 	}

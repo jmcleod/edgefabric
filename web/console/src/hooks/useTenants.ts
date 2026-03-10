@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiList, apiGet } from '@/lib/api';
 import { transformTenant } from '@/lib/transforms';
 import { useCreateMutation, useUpdateMutation, useDeleteMutation } from './useMutations';
-import type { ApiTenant } from '@/types/api';
+import type { ApiTenant, ApiNode, ApiDNSZone, ApiCDNSite } from '@/types/api';
 import type { Tenant } from '@/types';
 import type { ListResult } from '@/lib/api';
 import type { TenantFormData } from '@/lib/schemas';
@@ -53,4 +53,24 @@ export function useDeleteTenant() {
       successMessage: 'Tenant deleted',
     },
   );
+}
+
+/** Fetch per-tenant resource counts (nodes, DNS zones, CDN sites). */
+export function useTenantStats(tenantId: string | undefined) {
+  return useQuery({
+    queryKey: ['tenant-stats', tenantId],
+    queryFn: async () => {
+      const [nodes, zones, cdnSites] = await Promise.all([
+        apiList<ApiNode>('/api/v1/nodes', { limit: 1 }),
+        apiList<ApiDNSZone>(`/api/v1/tenants/${tenantId}/dns/zones`, { limit: 1 }),
+        apiList<ApiCDNSite>(`/api/v1/tenants/${tenantId}/cdn/sites`, { limit: 1 }),
+      ]);
+      return {
+        nodeCount: nodes.total,
+        zoneCount: zones.total,
+        cdnServiceCount: cdnSites.total,
+      };
+    },
+    enabled: !!tenantId,
+  });
 }
