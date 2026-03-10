@@ -14,6 +14,10 @@ import TenantDetailPage from "./pages/TenantDetailPage";
 import GatewaysPage from "./pages/GatewaysPage";
 import GatewayDetailPage from "./pages/GatewayDetailPage";
 import UsersPage from "./pages/UsersPage";
+import NodeGroupsPage from "./pages/NodeGroupsPage";
+import WireGuardPage from "./pages/WireGuardPage";
+import BGPPage from "./pages/BGPPage";
+import IPAllocationsPage from "./pages/IPAllocationsPage";
 import DNSZonesPage from "./pages/DNSZonesPage";
 import CDNServicesPage from "./pages/CDNServicesPage";
 import ProvisioningJobsPage from "./pages/ProvisioningJobsPage";
@@ -50,6 +54,10 @@ const App = () => (
               <Route path="/gateways" element={<RequireAuth><GatewaysPage /></RequireAuth>} />
               <Route path="/gateways/:id" element={<RequireAuth><GatewayDetailPage /></RequireAuth>} />
               <Route path="/users" element={<RequireAuth><UsersPage /></RequireAuth>} />
+              <Route path="/node-groups" element={<RequireAuth><NodeGroupsPage /></RequireAuth>} />
+              <Route path="/networking/wireguard" element={<RequireAuth><WireGuardPage /></RequireAuth>} />
+              <Route path="/networking/bgp" element={<RequireAuth><BGPPage /></RequireAuth>} />
+              <Route path="/networking/ips" element={<RequireAuth><IPAllocationsPage /></RequireAuth>} />
               <Route path="/jobs" element={<RequireAuth><ProvisioningJobsPage /></RequireAuth>} />
               <Route path="/audit" element={<RequireAuth><AuditLogsPage /></RequireAuth>} />
 
@@ -59,10 +67,6 @@ const App = () => (
 
               {/* Placeholder routes — will be replaced in later phases */}
               <Route path="/fleet-health" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
-              <Route path="/node-groups" element={<RequireAuth><NodesPage /></RequireAuth>} />
-              <Route path="/networking/wireguard" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
-              <Route path="/networking/bgp" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
-              <Route path="/networking/ips" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
               <Route path="/settings" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
 
               <Route path="*" element={<NotFound />} />

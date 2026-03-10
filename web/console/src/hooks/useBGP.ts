@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiList, apiGet } from '@/lib/api';
 import { transformBGPSession } from '@/lib/transforms';
+import { useCreateMutation, useUpdateMutation, useDeleteMutation } from './useMutations';
 import type { ApiBGPSession } from '@/types/api';
 import type { BGPPeer } from '@/types';
 import type { ListResult } from '@/lib/api';
+import type { BGPPeerFormData } from '@/lib/schemas';
 
 export function useBGPSessions(nodeId?: string) {
   return useQuery({
@@ -31,4 +33,34 @@ export function useBGPSession(id: string | undefined) {
     },
     enabled: !!id,
   });
+}
+
+export function useCreateBGPPeer(nodeId: string | undefined) {
+  return useCreateMutation<BGPPeerFormData>(
+    `/api/v1/nodes/${nodeId}/bgp-sessions`,
+    {
+      invalidateKeys: [['bgpSessions']],
+      successMessage: 'BGP peer created',
+    },
+  );
+}
+
+export function useUpdateBGPPeer() {
+  return useUpdateMutation<Partial<BGPPeerFormData>>(
+    (id) => `/api/v1/bgp-sessions/${id}`,
+    {
+      invalidateKeys: [['bgpSessions'], ['bgpSession']],
+      successMessage: 'BGP peer updated',
+    },
+  );
+}
+
+export function useDeleteBGPPeer() {
+  return useDeleteMutation(
+    (id) => `/api/v1/bgp-sessions/${id}`,
+    {
+      invalidateKeys: [['bgpSessions']],
+      successMessage: 'BGP peer deleted',
+    },
+  );
 }
