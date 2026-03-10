@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/jmcleod/edgefabric/internal/config"
+	"github.com/jmcleod/edgefabric/internal/gatewayclient"
 	"github.com/jmcleod/edgefabric/internal/gatewayrt"
+	"github.com/jmcleod/edgefabric/internal/gatewaystate"
 	"github.com/jmcleod/edgefabric/internal/observability"
 )
 
@@ -29,7 +31,13 @@ func RunGateway(cfg *config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// TODO: Connect to controller over WireGuard.
+	// Resolve gateway identity from state file.
+	client, err := resolveGatewayIdentity(cfg, logger)
+	if err != nil {
+		logger.Warn("gateway identity not available, route polling disabled",
+			slog.String("error", err.Error()),
+		)
+	}
 
 	// Initialize gateway route forwarding service.
 	gwRouteSvc := initGatewayRouteService(cfg.Gateway, logger)
@@ -42,7 +50,11 @@ func RunGateway(cfg *config.Config) error {
 			)
 
 			// Start gateway route reconciliation loop.
-			go gatewayRouteReconcileLoop(ctx, gwRouteSvc, cfg.Gateway.ControllerAddr, logger)
+			if client != nil {
+				go gatewayRouteReconcileLoop(ctx, gwRouteSvc, client, logger)
+			} else {
+				logger.Warn("skipping route reconciliation — no controller client available")
+			}
 		}
 	}
 
@@ -77,6 +89,29 @@ func RunGateway(cfg *config.Config) error {
 	return nil
 }
 
+// resolveGatewayIdentity loads the gateway's persisted state (ID + token)
+// and returns a controller client ready for config polling.
+func resolveGatewayIdentity(cfg *config.Config, logger *slog.Logger) (*gatewayclient.Client, error) {
+	state, err := gatewaystate.Load(cfg.Gateway.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("load gateway state: %w", err)
+	}
+
+	if state == nil {
+		return nil, fmt.Errorf("no gateway state file found in %s", cfg.Gateway.DataDir)
+	}
+
+	if state.GatewayID == "" || state.APIToken == "" {
+		return nil, fmt.Errorf("gateway state incomplete (missing gateway_id or api_token)")
+	}
+
+	logger.Info("loaded gateway identity",
+		slog.String("gateway_id", state.GatewayID),
+	)
+
+	return gatewayclient.New(cfg.Gateway.ControllerAddr, state.GatewayID, state.APIToken), nil
+}
+
 // initGatewayRouteService creates the appropriate gateway route forwarding service.
 func initGatewayRouteService(cfg config.GatewayConfig, logger *slog.Logger) gatewayrt.Service {
 	mode := cfg.RouteMode
@@ -92,7 +127,7 @@ func initGatewayRouteService(cfg config.GatewayConfig, logger *slog.Logger) gate
 	switch mode {
 	case "forwarder":
 		logger.Info("using gateway route forwarder service",
-			slog.String("wireguard_ip", wireGuardIP),
+			slog.String("bind_ip", wireGuardIP),
 		)
 		return gatewayrt.NewForwarderService(wireGuardIP, logger)
 	case "noop":
@@ -161,7 +196,17 @@ func startGatewayHealthServer(
 
 // gatewayRouteReconcileLoop periodically polls the controller for desired route state
 // and reconciles the gateway route forwarding service to match. Runs every 30 seconds.
-func gatewayRouteReconcileLoop(ctx context.Context, svc gatewayrt.Service, controllerAddr string, logger *slog.Logger) {
+func gatewayRouteReconcileLoop(ctx context.Context, svc gatewayrt.Service, client *gatewayclient.Client, logger *slog.Logger) {
+	// Immediate first reconciliation — don't wait 30s.
+	rtCfg, err := client.FetchRouteConfig(ctx)
+	if err != nil {
+		logger.Warn("gateway route initial config fetch failed", slog.String("error", err.Error()))
+	} else if err := svc.Reconcile(ctx, rtCfg); err != nil {
+		logger.Warn("gateway route initial reconciliation failed", slog.String("error", err.Error()))
+	} else {
+		logger.Info("gateway route initial reconciliation complete", slog.Int("routes", len(rtCfg.Routes)))
+	}
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -170,11 +215,16 @@ func gatewayRouteReconcileLoop(ctx context.Context, svc gatewayrt.Service, contr
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// TODO: Poll GET /api/v1/gateways/{id}/config/routes from controller
-			// and call svc.Reconcile(ctx, config).
-			logger.Debug("gateway route reconciliation tick",
-				slog.String("controller", controllerAddr),
-			)
+			rtCfg, err := client.FetchRouteConfig(ctx)
+			if err != nil {
+				logger.Warn("gateway route config fetch failed", slog.String("error", err.Error()))
+				continue
+			}
+			if err := svc.Reconcile(ctx, rtCfg); err != nil {
+				logger.Warn("gateway route reconciliation failed", slog.String("error", err.Error()))
+				continue
+			}
+			logger.Debug("gateway route reconciliation complete", slog.Int("routes", len(rtCfg.Routes)))
 		}
 	}
 }

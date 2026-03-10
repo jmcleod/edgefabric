@@ -31,7 +31,9 @@ node:
     enabled: true
     mode: "noop"
 
-  # Route: noop — forwarder needs WireGuard overlay.
+  # Route: real forwarder — TCP/UDP proxy to gateway. Works without
+  # WireGuard because the gateway's Docker bridge IP is used instead
+  # of a WireGuard overlay IP.
   route:
     enabled: true
-    mode: "noop"
+    mode: "forwarder"

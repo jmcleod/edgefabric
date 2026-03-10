@@ -1,7 +1,7 @@
 # EdgeFabric Comprehensive Demo — Docker Compose
 #
 # Starts the full platform: controller, 2 edge nodes (with real CDN + DNS),
-# a gateway, an origin server, and a VPS for enrollment demos.
+# a gateway (with route forwarding), an origin server, and a VPS.
 #
 # Usage:
 #   docker compose up --build        # Build and start everything
@@ -13,6 +13,8 @@
 #   CDN (node-2):      http://localhost:8082  (use Host: www.acme.example)
 #   DNS (node-1):      dig @localhost -p 5354 www.acme.example A
 #   DNS (node-2):      dig @localhost -p 5355 www.acme.example A
+#   Route via gateway: curl http://localhost:9001  (node-1 → gateway → origin)
+#   Route via gateway: curl http://localhost:9002  (node-2 → gateway → origin)
 #   Origin (direct):   http://localhost:8888
 #   VPS (SSH):         ssh root@localhost -p 2222 (password: demo)
 #   Gateway health:    http://localhost:9190/healthz
@@ -62,7 +64,7 @@ services:
       ef-mesh:
 
   # ──────────────────────────────────────────────────────────────────
-  # Node 1 — edge-us-east-1 (CDN proxy, DNS server, BGP noop, Route noop)
+  # Node 1 — edge-us-east-1 (CDN proxy, DNS server, BGP noop, Route forwarder)
   # ──────────────────────────────────────────────────────────────────
   node-1:
     build:
@@ -74,6 +76,7 @@ services:
       - "8081:8080"              # CDN proxy
       - "5354:5353/tcp"          # DNS (TCP)
       - "5354:5353/udp"          # DNS (UDP)
+      - "9001:9000"              # Route: http-to-origin (via gateway)
     volumes:
       - ef-shared:/shared:ro
       - node1-data:/var/lib/edgefabric
@@ -89,7 +92,7 @@ services:
         ipv4_address: 172.20.0.10
 
   # ──────────────────────────────────────────────────────────────────
-  # Node 2 — edge-eu-west-1 (CDN proxy, DNS server, BGP noop, Route noop)
+  # Node 2 — edge-eu-west-1 (CDN proxy, DNS server, BGP noop, Route forwarder)
   # ──────────────────────────────────────────────────────────────────
   node-2:
     build:
@@ -101,6 +104,7 @@ services:
       - "8082:8080"              # CDN proxy
       - "5355:5353/tcp"          # DNS (TCP)
       - "5355:5353/udp"          # DNS (UDP)
+      - "9002:9000"              # Route: http-to-origin (via gateway)
     volumes:
       - ef-shared:/shared:ro
       - node2-data:/var/lib/edgefabric
@@ -116,7 +120,7 @@ services:
         ipv4_address: 172.20.0.11
 
   # ──────────────────────────────────────────────────────────────────
-  # Gateway — route forwarding (noop mode in demo)
+  # Gateway — route forwarding (forwarder mode, Docker bridge IPs)
   # ──────────────────────────────────────────────────────────────────
   gateway:
     build:
@@ -127,12 +131,13 @@ services:
     ports:
       - "9190:9090"              # Health/metrics
     volumes:
+      - ef-shared:/shared:ro
       - gw-data:/var/lib/edgefabric
       - ./demo/gateway.yaml:/etc/edgefabric/edgefabric.yaml:ro
       - ./demo/gateway-entrypoint.sh:/demo/gateway-entrypoint.sh:ro
     depends_on:
-      controller:
-        condition: service_healthy
+      demo-setup:
+        condition: service_completed_successfully
     networks:
       ef-mesh:
         ipv4_address: 172.20.0.50

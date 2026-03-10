@@ -1,7 +1,9 @@
 # EdgeFabric Gateway — Docker Demo Configuration
 #
-# Runs in noop mode since the gateway reconciliation loop requires
-# WireGuard overlay networking which isn't available in plain Docker.
+# Uses forwarder mode to demonstrate route forwarding over the Docker
+# bridge network. In production, wireguard_ip would be the gateway's
+# WireGuard overlay address; here it's set to the Docker bridge IP
+# so the gateway binds listeners on the reachable network interface.
 
 role: gateway
 log_level: info
@@ -13,8 +15,11 @@ gateway:
   data_dir: /var/lib/edgefabric
   health_addr: ":9090"
 
-  # Gateway's overlay IP (simulated in demo).
-  wireguard_ip: "10.100.0.50"
+  # Gateway's Docker bridge IP — used as the listener bind address.
+  # In production this would be the WireGuard overlay IP (e.g., 10.100.0.50).
+  # On macOS/Docker (no WireGuard) we use the bridge IP directly.
+  wireguard_ip: "172.20.0.50"
 
-  # Noop — real forwarding needs WireGuard mesh.
-  route_mode: "noop"
+  # Real forwarder — binds per-route TCP/UDP listeners and proxies
+  # traffic to private destinations. Works without WireGuard.
+  route_mode: "forwarder"

@@ -168,7 +168,9 @@ func (s *DefaultService) GetNodeRouteConfig(ctx context.Context, nodeID domain.I
 			}
 			seenRoutes[r.ID] = true
 
-			// Look up gateway WireGuard IP (cached).
+			// Look up gateway dial address (cached).
+			// Prefer WireGuard overlay IP; fall back to PublicIP for environments
+			// without WireGuard (e.g., Docker demos on macOS).
 			gwIP, ok := gwCache[r.GatewayID]
 			if !ok {
 				gw, err := s.gateways.GetGateway(ctx, r.GatewayID)
@@ -176,6 +178,9 @@ func (s *DefaultService) GetNodeRouteConfig(ctx context.Context, nodeID domain.I
 					return nil, fmt.Errorf("get gateway %s: %w", r.GatewayID, err)
 				}
 				gwIP = gw.WireGuardIP
+				if gwIP == "" {
+					gwIP = gw.PublicIP
+				}
 				gwCache[r.GatewayID] = gwIP
 			}
 

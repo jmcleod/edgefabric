@@ -219,6 +219,11 @@ ACME_GW_RESP=$(api POST /api/v1/gateways "{
 ACME_GW_ID=$(echo "$ACME_GW_RESP" | jq_data id)
 ok "Gateway created: $ACME_GW_ID"
 
+# Write gateway state file so the gateway container can poll route config.
+info "Writing gateway state file..."
+printf '{\n  "gateway_id": "%s",\n  "api_token": "%s"\n}\n' "$ACME_GW_ID" "$TOKEN" > /shared/gateway-state.json
+ok "Gateway state written to /shared/gateway-state.json"
+
 info "Creating gateway: gw-branch (Globex)..."
 GLOBEX_GW_RESP=$(api POST /api/v1/gateways "{
   \"tenant_id\": \"$GLOBEX_ID\",
@@ -380,20 +385,40 @@ ok "CDN origin added: 172.20.0.100:80 (origin container)"
 # ROUTES
 # ===========================================================================
 
-info "Creating route: ssh-to-hq (Acme)..."
-ACME_ROUTE_RESP=$(api POST "/api/v1/tenants/${ACME_ID}/routes" "{
-  \"name\": \"ssh-to-hq\",
+# Route: http-to-origin — demonstrates traffic flowing:
+#   Client → Node (port 9000) → Gateway (172.20.0.50:9000) → Origin (172.20.0.100:80)
+# Exposed on host as: node-1 → localhost:9001, node-2 → localhost:9002
+info "Creating route: http-to-origin (Acme)..."
+ACME_HTTP_ROUTE_RESP=$(api POST "/api/v1/tenants/${ACME_ID}/routes" "{
+  \"name\": \"http-to-origin\",
+  \"protocol\": \"tcp\",
+  \"entry_ip\": \"0.0.0.0\",
+  \"entry_port\": 9000,
+  \"gateway_id\": \"$ACME_GW_ID\",
+  \"destination_ip\": \"172.20.0.100\",
+  \"destination_port\": 80,
+  \"node_group_id\": \"$ACME_GROUP_ID\"
+}")
+ACME_HTTP_ROUTE_ID=$(echo "$ACME_HTTP_ROUTE_RESP" | jq_data id)
+ok "Route created: $ACME_HTTP_ROUTE_ID (node:9000 → gw → origin:80)"
+
+# Route: ssh-to-vps — demonstrates SSH traffic via gateway:
+#   Client → Node (port 2222) → Gateway (172.20.0.50:2222) → VPS (172.20.0.12:22)
+info "Creating route: ssh-to-vps (Acme)..."
+ACME_SSH_ROUTE_RESP=$(api POST "/api/v1/tenants/${ACME_ID}/routes" "{
+  \"name\": \"ssh-to-vps\",
   \"protocol\": \"tcp\",
   \"entry_ip\": \"0.0.0.0\",
   \"entry_port\": 2222,
   \"gateway_id\": \"$ACME_GW_ID\",
-  \"destination_ip\": \"10.0.1.100\",
+  \"destination_ip\": \"172.20.0.12\",
   \"destination_port\": 22,
   \"node_group_id\": \"$ACME_GROUP_ID\"
 }")
-ACME_ROUTE_ID=$(echo "$ACME_ROUTE_RESP" | jq_data id)
-ok "Route created: $ACME_ROUTE_ID"
+ACME_SSH_ROUTE_ID=$(echo "$ACME_SSH_ROUTE_RESP" | jq_data id)
+ok "Route created: $ACME_SSH_ROUTE_ID (node:2222 → gw → vps:22)"
 
+# Route: db-access (Globex) — uses the non-demo gateway, kept for SPA display.
 info "Creating route: db-access (Globex)..."
 GLOBEX_ROUTE_RESP=$(api POST "/api/v1/tenants/${GLOBEX_ID}/routes" "{
   \"name\": \"db-access\",
@@ -481,6 +506,8 @@ printf '  CDN (node-1):      curl -H "Host: www.acme.example" http://localhost:8
 printf '  CDN (node-2):      curl -H "Host: www.acme.example" http://localhost:8082\n'
 printf '  DNS (node-1):      dig @localhost -p 5354 www.acme.example A\n'
 printf '  DNS (node-2):      dig @localhost -p 5355 www.acme.example A\n'
+printf '  Route (node-1→gw): curl http://localhost:9001  (via gateway)\n'
+printf '  Route (node-2→gw): curl http://localhost:9002  (via gateway)\n'
 printf '  Origin (direct):   http://localhost:8888\n'
 printf '  Gateway health:    http://localhost:9190/healthz\n'
 printf '\n'
@@ -491,7 +518,7 @@ printf '  Groups:     acme-global-edge (2 nodes), globex-edge (2 nodes)\n'
 printf '  Gateways:   gw-hq (Acme), gw-branch (Globex)\n'
 printf '  DNS Zones:  acme.example (5 records), globex.example (4 records)\n'
 printf '  CDN Sites:  www-cdn (Acme, cached), api-cdn (Globex, pass-through)\n'
-printf '  Routes:     ssh-to-hq (tcp/2222), db-access (tcp/5432)\n'
+printf '  Routes:     http-to-origin (tcp/9000), ssh-to-vps (tcp/2222), db-access (tcp/5432)\n'
 printf '  BGP:        node-1 <-> AS64512, node-2 <-> AS64513\n'
 printf '  IPs:        203.0.113.0/24 (Acme), 198.51.100.0/24 (Globex)\n'
 printf '\n'
@@ -508,6 +535,10 @@ printf '  curl -v -H "Host: www.acme.example" http://localhost:8081\n'
 printf '\n'
 printf '  # DNS lookup\n'
 printf '  dig @localhost -p 5354 www.acme.example A\n'
+printf '\n'
+printf '  # Route via gateway (node → gateway → origin, no WireGuard needed)\n'
+printf '  curl http://localhost:9001    # node-1 → gateway → origin\n'
+printf '  curl http://localhost:9002    # node-2 → gateway → origin\n'
 printf '\n'
 printf '  # VPS enrollment\n'
 printf '  ssh root@localhost -p 2222\n'
