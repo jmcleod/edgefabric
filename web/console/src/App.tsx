@@ -10,7 +10,10 @@ import GlobalDashboard from "./pages/GlobalDashboard";
 import NodesPage from "./pages/NodesPage";
 import NodeDetailPage from "./pages/NodeDetailPage";
 import TenantsPage from "./pages/TenantsPage";
+import TenantDetailPage from "./pages/TenantDetailPage";
 import GatewaysPage from "./pages/GatewaysPage";
+import GatewayDetailPage from "./pages/GatewayDetailPage";
+import UsersPage from "./pages/UsersPage";
 import DNSZonesPage from "./pages/DNSZonesPage";
 import CDNServicesPage from "./pages/CDNServicesPage";
 import ProvisioningJobsPage from "./pages/ProvisioningJobsPage";
@@ -38,12 +41,15 @@ const App = () => (
               {/* Public route */}
               <Route path="/login" element={<LoginPage />} />
 
-              {/* Protected routes */}
+              {/* Superuser routes */}
               <Route path="/" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
               <Route path="/nodes" element={<RequireAuth><NodesPage /></RequireAuth>} />
               <Route path="/nodes/:id" element={<RequireAuth><NodeDetailPage /></RequireAuth>} />
               <Route path="/tenants" element={<RequireAuth><TenantsPage /></RequireAuth>} />
+              <Route path="/tenants/:id" element={<RequireAuth><TenantDetailPage /></RequireAuth>} />
               <Route path="/gateways" element={<RequireAuth><GatewaysPage /></RequireAuth>} />
+              <Route path="/gateways/:id" element={<RequireAuth><GatewayDetailPage /></RequireAuth>} />
+              <Route path="/users" element={<RequireAuth><UsersPage /></RequireAuth>} />
               <Route path="/jobs" element={<RequireAuth><ProvisioningJobsPage /></RequireAuth>} />
               <Route path="/audit" element={<RequireAuth><AuditLogsPage /></RequireAuth>} />
 
@@ -51,13 +57,12 @@ const App = () => (
               <Route path="/tenant/dns/zones" element={<RequireAuth><DNSZonesPage /></RequireAuth>} />
               <Route path="/tenant/cdn/services" element={<RequireAuth><CDNServicesPage /></RequireAuth>} />
 
-              {/* Placeholder routes for nav completeness */}
+              {/* Placeholder routes — will be replaced in later phases */}
               <Route path="/fleet-health" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
               <Route path="/node-groups" element={<RequireAuth><NodesPage /></RequireAuth>} />
               <Route path="/networking/wireguard" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
               <Route path="/networking/bgp" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
               <Route path="/networking/ips" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
-              <Route path="/users" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
               <Route path="/settings" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
 
               <Route path="*" element={<NotFound />} />

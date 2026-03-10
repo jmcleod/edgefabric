@@ -6,20 +6,26 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useNode } from '@/hooks/useNodes';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { useNode, useDeleteNode, useNodeAction } from '@/hooks/useNodes';
 import { useBGPSessions } from '@/hooks/useBGP';
 import { useWireGuardPeers } from '@/hooks/useWireGuard';
+import { useProvisioningJobs } from '@/hooks/useProvisioning';
+import { useState } from 'react';
 import {
   Server,
   ArrowLeft,
   RefreshCw,
-  Terminal,
   Power,
   Clock,
   Radio,
   Shield,
   Tag,
   Globe,
+  Trash2,
+  PlayCircle,
+  RotateCcw,
+  ArrowUpCircle,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -29,9 +35,14 @@ export default function NodeDetailPage() {
   const { data: node, isLoading, error } = useNode(id);
   const { data: bgpData } = useBGPSessions(id);
   const { data: wgData } = useWireGuardPeers(id);
+  const { data: jobsData } = useProvisioningJobs(id);
+  const nodeAction = useNodeAction();
+  const deleteNode = useDeleteNode();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const nodeBgpPeers = bgpData?.items || [];
   const nodeWgPeers = wgData?.items || [];
+  const nodeJobs = jobsData?.items || [];
 
   if (isLoading) {
     return (
@@ -88,14 +99,17 @@ export default function NodeDetailPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              <Terminal className="mr-2 h-4 w-4" /> Console
-            </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => nodeAction.mutate({ id: node.id, action: 'restart' })}>
               <RefreshCw className="mr-2 h-4 w-4" /> Restart
             </Button>
-            <Button variant="destructive" size="sm">
-              <Power className="mr-2 h-4 w-4" /> Shutdown
+            <Button variant="outline" size="sm" onClick={() => nodeAction.mutate({ id: node.id, action: 'upgrade' })}>
+              <ArrowUpCircle className="mr-2 h-4 w-4" /> Upgrade
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => nodeAction.mutate({ id: node.id, action: 'reprovision' })}>
+              <RotateCcw className="mr-2 h-4 w-4" /> Reprovision
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
             </Button>
           </div>
         </div>
@@ -119,7 +133,7 @@ export default function NodeDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="networking">Networking</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="jobs">Jobs ({nodeJobs.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -212,21 +226,57 @@ export default function NodeDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="logs">
+        <TabsContent value="jobs">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Recent Logs</CardTitle>
+              <CardTitle className="text-base">Provisioning Jobs</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-muted/30 rounded-lg p-4 font-mono text-xs space-y-1 max-h-80 overflow-auto">
-                <p className="text-muted-foreground text-center py-8">
-                  Log streaming not yet available. Logs will appear here once the log aggregation endpoint is implemented.
-                </p>
-              </div>
+              {nodeJobs.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No provisioning jobs found for this node.</p>
+              ) : (
+                <div className="space-y-3">
+                  {nodeJobs.map((job) => (
+                    <div key={job.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                      <div>
+                        <p className="text-sm font-medium">{job.type}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {job.createdAt ? new Date(job.createdAt).toLocaleString() : '\u2014'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {job.progress > 0 && job.progress < 100 && (
+                          <span className="text-xs text-muted-foreground">{job.progress}%</span>
+                        )}
+                        <StatusBadge
+                          status={
+                            job.status === 'completed' ? 'healthy' :
+                            job.status === 'failed' ? 'critical' :
+                            job.status === 'running' ? 'syncing' : 'unknown'
+                          }
+                          size="sm"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        entityName={node.name}
+        onConfirm={async () => {
+          await deleteNode.mutateAsync(node.id);
+          navigate('/nodes');
+        }}
+        isDeleting={deleteNode.isPending}
+      />
     </AppLayout>
   );
 }

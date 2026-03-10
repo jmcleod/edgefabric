@@ -1,25 +1,47 @@
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useNodes } from '@/hooks/useNodes';
+import { FormDialog, type FieldConfig } from '@/components/FormDialog';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { useNodes, useCreateNode, useDeleteNode, useNodeAction } from '@/hooks/useNodes';
+import { nodeSchema, type NodeFormData } from '@/lib/schemas';
 import type { Node } from '@/types';
-import { Server, Eye, MoreHorizontal } from 'lucide-react';
+import { Server, Eye, MoreHorizontal, Trash2, RefreshCw, Power, PlayCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+const nodeFields: FieldConfig<NodeFormData>[] = [
+  { name: 'name', label: 'Name', placeholder: 'edge-us-east-01' },
+  { name: 'hostname', label: 'Hostname', placeholder: 'edge-us-east-01.example.com' },
+  { name: 'public_ip', label: 'Public IP', placeholder: '203.0.113.10' },
+  { name: 'ssh_port', label: 'SSH Port', type: 'number', placeholder: '22' },
+  { name: 'ssh_user', label: 'SSH User', placeholder: 'root' },
+  { name: 'region', label: 'Region', placeholder: 'us-east-1' },
+  { name: 'provider', label: 'Provider', placeholder: 'aws' },
+  { name: 'tenant_id', label: 'Tenant ID', placeholder: 'Optional', description: 'Assign to a specific tenant' },
+];
 
 export default function NodesPage() {
   const navigate = useNavigate();
   const { data, isLoading } = useNodes();
   const nodes = data?.items || [];
+  const createNode = useCreateNode();
+  const deleteNode = useDeleteNode();
+  const nodeAction = useNodeAction();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Node | null>(null);
 
   const columns: Column<Node>[] = [
     {
@@ -78,9 +100,20 @@ export default function NodesPage() {
             <DropdownMenuItem onClick={() => navigate(`/nodes/${node.id}`)}>
               <Eye className="mr-2 h-4 w-4" /> View Details
             </DropdownMenuItem>
-            <DropdownMenuItem>SSH Console</DropdownMenuItem>
-            <DropdownMenuItem>Restart Node</DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">Remove Node</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => nodeAction.mutate({ id: node.id, action: 'restart' })}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Restart
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => nodeAction.mutate({ id: node.id, action: 'start' })}>
+              <PlayCircle className="mr-2 h-4 w-4" /> Start
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => nodeAction.mutate({ id: node.id, action: 'stop' })}>
+              <Power className="mr-2 h-4 w-4" /> Stop
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(node)}>
+              <Trash2 className="mr-2 h-4 w-4" /> Remove Node
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -95,7 +128,7 @@ export default function NodesPage() {
         icon={Server}
         action={{
           label: 'Add Node',
-          onClick: () => console.log('Add node'),
+          onClick: () => setCreateOpen(true),
         }}
       />
 
@@ -110,6 +143,37 @@ export default function NodesPage() {
           onRowClick={(node) => navigate(`/nodes/${node.id}`)}
         />
       )}
+
+      {/* Create Dialog */}
+      <FormDialog<NodeFormData>
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        title="Add Node"
+        description="Register a new node in the platform."
+        schema={nodeSchema}
+        defaultValues={{ name: '', hostname: '', public_ip: '', ssh_port: 22, ssh_user: 'root', region: '', provider: '', tenant_id: '' }}
+        fields={nodeFields}
+        onSubmit={async (data) => {
+          await createNode.mutateAsync(data);
+          setCreateOpen(false);
+        }}
+        isSubmitting={createNode.isPending}
+        submitLabel="Add Node"
+      />
+
+      {/* Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        entityName={deleteTarget?.name}
+        onConfirm={async () => {
+          if (deleteTarget) {
+            await deleteNode.mutateAsync(deleteTarget.id);
+            setDeleteTarget(null);
+          }
+        }}
+        isDeleting={deleteNode.isPending}
+      />
     </AppLayout>
   );
 }
