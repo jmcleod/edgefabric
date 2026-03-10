@@ -115,19 +115,38 @@ func (s *SQLiteStore) ListNodes(ctx context.Context, tenantID *domain.ID, params
 		return nil, 0, fmt.Errorf("count nodes: %w", countErr)
 	}
 
+	const selectCols = `id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
+			ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at`
+
 	var rows *sql.Rows
 	var err error
-	if tenantID != nil {
+
+	// Cursor-based pagination: use keyset WHERE (created_at, id) < (?, ?) for DESC ordering.
+	if cursor, ok := storage.DecodeCursor(params.Cursor); ok {
+		if tenantID != nil {
+			rows, err = s.db.QueryContext(ctx,
+				`SELECT `+selectCols+`
+				 FROM nodes WHERE tenant_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
+				 ORDER BY created_at DESC, id DESC LIMIT ?`,
+				tenantID.String(), cursor.CreatedAt, cursor.CreatedAt, cursor.ID, params.Limit,
+			)
+		} else {
+			rows, err = s.db.QueryContext(ctx,
+				`SELECT `+selectCols+`
+				 FROM nodes WHERE (created_at < ? OR (created_at = ? AND id < ?))
+				 ORDER BY created_at DESC, id DESC LIMIT ?`,
+				cursor.CreatedAt, cursor.CreatedAt, cursor.ID, params.Limit,
+			)
+		}
+	} else if tenantID != nil {
 		rows, err = s.db.QueryContext(ctx,
-			`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
-			        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at
+			`SELECT `+selectCols+`
 			 FROM nodes WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 			tenantID.String(), params.Limit, params.Offset,
 		)
 	} else {
 		rows, err = s.db.QueryContext(ctx,
-			`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
-			        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at
+			`SELECT `+selectCols+`
 			 FROM nodes ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 			params.Limit, params.Offset,
 		)

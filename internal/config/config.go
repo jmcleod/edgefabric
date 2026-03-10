@@ -30,12 +30,37 @@ type Config struct {
 
 // ControllerConfig holds controller-specific settings.
 type ControllerConfig struct {
-	ListenAddr     string         `yaml:"listen_addr"`
-	ExternalURL    string         `yaml:"external_url"`
-	Storage        StorageConfig  `yaml:"storage"`
-	TLS            TLSConfig      `yaml:"tls,omitempty"`
-	WireGuard      WireGuardHub   `yaml:"wireguard"`
-	Secrets        SecretsConfig  `yaml:"secrets"`
+	ListenAddr     string              `yaml:"listen_addr"`
+	ExternalURL    string              `yaml:"external_url"`
+	Storage        StorageConfig       `yaml:"storage"`
+	TLS            TLSConfig           `yaml:"tls,omitempty"`
+	CORS           CORSConfig          `yaml:"cors,omitempty"`
+	Notifications  NotificationsConfig `yaml:"notifications,omitempty"`
+	WireGuard      WireGuardHub        `yaml:"wireguard"`
+	Secrets        SecretsConfig       `yaml:"secrets"`
+}
+
+// CORSConfig holds Cross-Origin Resource Sharing settings.
+type CORSConfig struct {
+	AllowedOrigins []string `yaml:"allowed_origins,omitempty"` // e.g., ["https://console.example.com"]
+}
+
+// NotificationsConfig holds webhook and Slack notification settings.
+type NotificationsConfig struct {
+	Webhooks []WebhookEndpoint `yaml:"webhooks,omitempty"`
+	Slack    SlackNotification `yaml:"slack,omitempty"`
+}
+
+// WebhookEndpoint defines a single webhook notification target.
+type WebhookEndpoint struct {
+	URL    string `yaml:"url"`
+	Secret string `yaml:"secret,omitempty"` // HMAC-SHA256 signing secret.
+}
+
+// SlackNotification defines Slack webhook notification settings.
+type SlackNotification struct {
+	WebhookURL string `yaml:"webhook_url,omitempty"`
+	Channel    string `yaml:"channel,omitempty"`
 }
 
 // StorageConfig defines the persistence backend.

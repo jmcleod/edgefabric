@@ -23,10 +23,11 @@ type Response struct {
 
 // ListResponse is the standard JSON envelope for paginated list responses.
 type ListResponse struct {
-	Data   any `json:"data"`
-	Total  int `json:"total"`
-	Offset int `json:"offset"`
-	Limit  int `json:"limit"`
+	Data       any    `json:"data"`
+	Total      int    `json:"total"`
+	Offset     int    `json:"offset"`
+	Limit      int    `json:"limit"`
+	NextCursor string `json:"next_cursor,omitempty"`
 }
 
 // Error is the standard error payload.
@@ -51,6 +52,19 @@ func ListJSON(w http.ResponseWriter, data any, total, offset, limit int) {
 		Total:  total,
 		Offset: offset,
 		Limit:  limit,
+	})
+}
+
+// CursorListJSON writes a cursor-paginated list response.
+// nextCursor is empty when there are no more results.
+func CursorListJSON(w http.ResponseWriter, data any, total, limit int, nextCursor string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(ListResponse{
+		Data:       data,
+		Total:      total,
+		Limit:      limit,
+		NextCursor: nextCursor,
 	})
 }
 
@@ -94,11 +108,16 @@ func ParseID(r *http.Request, name string) (domain.ID, error) {
 }
 
 // ParseListParams extracts pagination parameters from query string.
+// Supports both offset-based (?offset=N&limit=N) and cursor-based (?cursor=TOKEN&limit=N)
+// pagination. When cursor is present, offset is ignored.
 // Defaults: offset=0, limit=50. Max limit=200.
 func ParseListParams(r *http.Request) storage.ListParams {
 	params := storage.ListParams{
 		Offset: 0,
 		Limit:  storage.DefaultLimit,
+	}
+	if v := r.URL.Query().Get("cursor"); v != "" {
+		params.Cursor = v
 	}
 	if v := r.URL.Query().Get("offset"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {

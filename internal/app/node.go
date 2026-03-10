@@ -14,6 +14,8 @@ import (
 	"github.com/jmcleod/edgefabric/internal/cdnserver"
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/dnsserver"
+	"github.com/jmcleod/edgefabric/internal/nodeclient"
+	"github.com/jmcleod/edgefabric/internal/nodestate"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/routeserver"
 )
@@ -33,6 +35,12 @@ func RunNode(cfg *config.Config) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Load or establish node identity.
+	client, err := resolveNodeIdentity(ctx, cfg, logger)
+	if err != nil {
+		return fmt.Errorf("resolve node identity: %w", err)
+	}
 
 	// Initialize BGP service if enabled.
 	var bgpSvc bgp.Service
@@ -58,7 +66,7 @@ func RunNode(cfg *config.Config) error {
 				)
 
 				// Start BGP reconciliation loop.
-				go bgpReconcileLoop(ctx, bgpSvc, cfg.Node.ControllerAddr, logger)
+				go bgpReconcileLoop(ctx, bgpSvc, client, logger)
 			}
 		}
 	}
@@ -82,7 +90,7 @@ func RunNode(cfg *config.Config) error {
 				)
 
 				// Start DNS reconciliation loop.
-				go dnsReconcileLoop(ctx, dnsSvc, cfg.Node.ControllerAddr, logger)
+				go dnsReconcileLoop(ctx, dnsSvc, client, logger)
 			}
 		}
 	}
@@ -106,7 +114,7 @@ func RunNode(cfg *config.Config) error {
 				)
 
 				// Start CDN reconciliation loop.
-				go cdnReconcileLoop(ctx, cdnSvc, cfg.Node.ControllerAddr, logger)
+				go cdnReconcileLoop(ctx, cdnSvc, client, logger)
 			}
 		}
 	}
@@ -124,12 +132,10 @@ func RunNode(cfg *config.Config) error {
 				)
 
 				// Start route reconciliation loop.
-				go routeReconcileLoop(ctx, routeSvc, cfg.Node.ControllerAddr, logger)
+				go routeReconcileLoop(ctx, routeSvc, client, logger)
 			}
 		}
 	}
-
-	// TODO: Connect to controller over WireGuard.
 
 	// Start health/metrics server for Prometheus scraping and health probes.
 	healthSrv := startNodeHealthServer(cfg.Node, bgpSvc, dnsSvc, cdnSvc, routeSvc, logger)
@@ -195,6 +201,51 @@ func RunNode(cfg *config.Config) error {
 	return nil
 }
 
+// resolveNodeIdentity loads persisted node state or enrolls with the controller.
+// Returns a controller client ready for config polling.
+func resolveNodeIdentity(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*nodeclient.Client, error) {
+	// Try loading existing state.
+	state, err := nodestate.Load(cfg.Node.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("load node state: %w", err)
+	}
+
+	if state != nil {
+		logger.Info("loaded existing node state",
+			slog.String("node_id", state.NodeID),
+			slog.String("wireguard_ip", state.WireGuardIP),
+		)
+		return nodeclient.New(cfg.Node.ControllerAddr, state.NodeID, state.APIToken), nil
+	}
+
+	// No state — enroll with the controller.
+	if cfg.Node.EnrollmentToken == "" {
+		return nil, fmt.Errorf("no node state and no enrollment_token configured")
+	}
+
+	logger.Info("enrolling with controller", slog.String("controller", cfg.Node.ControllerAddr))
+	result, err := nodeclient.Enroll(ctx, cfg.Node.ControllerAddr, cfg.Node.EnrollmentToken)
+	if err != nil {
+		return nil, fmt.Errorf("enrollment failed: %w", err)
+	}
+
+	logger.Info("enrollment successful",
+		slog.String("node_id", result.NodeID),
+		slog.String("wireguard_ip", result.WireGuardIP),
+	)
+
+	// Persist state for future restarts.
+	if err := nodestate.Save(cfg.Node.DataDir, &nodestate.State{
+		NodeID:      result.NodeID,
+		APIToken:    result.APIToken,
+		WireGuardIP: result.WireGuardIP,
+	}); err != nil {
+		logger.Error("failed to save node state (continuing anyway)", slog.String("error", err.Error()))
+	}
+
+	return nodeclient.New(cfg.Node.ControllerAddr, result.NodeID, result.APIToken), nil
+}
+
 // initBGPService creates the appropriate BGP service based on config mode.
 func initBGPService(cfg config.BGPConfig, logger *slog.Logger) bgp.Service {
 	mode := cfg.Mode
@@ -237,7 +288,7 @@ func initDNSService(cfg config.DNSConfig, logger *slog.Logger) dnsserver.Service
 
 // bgpReconcileLoop periodically polls the controller for desired BGP state
 // and reconciles the local BGP service to match. Runs every 30 seconds.
-func bgpReconcileLoop(ctx context.Context, svc bgp.Service, controllerAddr string, logger *slog.Logger) {
+func bgpReconcileLoop(ctx context.Context, svc bgp.Service, client *nodeclient.Client, logger *slog.Logger) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -246,19 +297,23 @@ func bgpReconcileLoop(ctx context.Context, svc bgp.Service, controllerAddr strin
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// TODO: Poll GET /api/v1/nodes/{id}/config/bgp from controller
-			// and call svc.Reconcile(ctx, sessions).
-			// For now, just log that reconciliation would happen.
-			logger.Debug("BGP reconciliation tick",
-				slog.String("controller", controllerAddr),
-			)
+			sessions, err := client.FetchBGPConfig(ctx)
+			if err != nil {
+				logger.Warn("BGP config fetch failed", slog.String("error", err.Error()))
+				continue
+			}
+			if err := svc.Reconcile(ctx, sessions); err != nil {
+				logger.Warn("BGP reconciliation failed", slog.String("error", err.Error()))
+			} else {
+				logger.Debug("BGP reconciliation complete", slog.Int("sessions", len(sessions)))
+			}
 		}
 	}
 }
 
 // dnsReconcileLoop periodically polls the controller for desired DNS state
 // and reconciles the local DNS service to match. Runs every 30 seconds.
-func dnsReconcileLoop(ctx context.Context, svc dnsserver.Service, controllerAddr string, logger *slog.Logger) {
+func dnsReconcileLoop(ctx context.Context, svc dnsserver.Service, client *nodeclient.Client, logger *slog.Logger) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -267,12 +322,16 @@ func dnsReconcileLoop(ctx context.Context, svc dnsserver.Service, controllerAddr
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// TODO: Poll GET /api/v1/nodes/{id}/config/dns from controller
-			// and call svc.Reconcile(ctx, config).
-			// For now, just log that reconciliation would happen.
-			logger.Debug("DNS reconciliation tick",
-				slog.String("controller", controllerAddr),
-			)
+			dnsCfg, err := client.FetchDNSConfig(ctx)
+			if err != nil {
+				logger.Warn("DNS config fetch failed", slog.String("error", err.Error()))
+				continue
+			}
+			if err := svc.Reconcile(ctx, dnsCfg); err != nil {
+				logger.Warn("DNS reconciliation failed", slog.String("error", err.Error()))
+			} else {
+				logger.Debug("DNS reconciliation complete", slog.Int("zones", len(dnsCfg.Zones)))
+			}
 		}
 	}
 }
@@ -299,7 +358,7 @@ func initCDNService(cfg config.CDNConfig, logger *slog.Logger) cdnserver.Service
 
 // cdnReconcileLoop periodically polls the controller for desired CDN state
 // and reconciles the local CDN service to match. Runs every 30 seconds.
-func cdnReconcileLoop(ctx context.Context, svc cdnserver.Service, controllerAddr string, logger *slog.Logger) {
+func cdnReconcileLoop(ctx context.Context, svc cdnserver.Service, client *nodeclient.Client, logger *slog.Logger) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -308,12 +367,16 @@ func cdnReconcileLoop(ctx context.Context, svc cdnserver.Service, controllerAddr
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// TODO: Poll GET /api/v1/nodes/{id}/config/cdn from controller
-			// and call svc.Reconcile(ctx, config).
-			// For now, just log that reconciliation would happen.
-			logger.Debug("CDN reconciliation tick",
-				slog.String("controller", controllerAddr),
-			)
+			cdnCfg, err := client.FetchCDNConfig(ctx)
+			if err != nil {
+				logger.Warn("CDN config fetch failed", slog.String("error", err.Error()))
+				continue
+			}
+			if err := svc.Reconcile(ctx, cdnCfg); err != nil {
+				logger.Warn("CDN reconciliation failed", slog.String("error", err.Error()))
+			} else {
+				logger.Debug("CDN reconciliation complete", slog.Int("sites", len(cdnCfg.Sites)))
+			}
 		}
 	}
 }
@@ -340,7 +403,7 @@ func initRouteService(cfg config.RouteConfig, logger *slog.Logger) routeserver.S
 
 // routeReconcileLoop periodically polls the controller for desired route state
 // and reconciles the local route forwarding service to match. Runs every 30 seconds.
-func routeReconcileLoop(ctx context.Context, svc routeserver.Service, controllerAddr string, logger *slog.Logger) {
+func routeReconcileLoop(ctx context.Context, svc routeserver.Service, client *nodeclient.Client, logger *slog.Logger) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -349,11 +412,16 @@ func routeReconcileLoop(ctx context.Context, svc routeserver.Service, controller
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// TODO: Poll GET /api/v1/nodes/{id}/config/routes from controller
-			// and call svc.Reconcile(ctx, config).
-			logger.Debug("route reconciliation tick",
-				slog.String("controller", controllerAddr),
-			)
+			rtCfg, err := client.FetchRouteConfig(ctx)
+			if err != nil {
+				logger.Warn("route config fetch failed", slog.String("error", err.Error()))
+				continue
+			}
+			if err := svc.Reconcile(ctx, rtCfg); err != nil {
+				logger.Warn("route reconciliation failed", slog.String("error", err.Error()))
+			} else {
+				logger.Debug("route reconciliation complete", slog.Int("routes", len(rtCfg.Routes)))
+			}
 		}
 	}
 }

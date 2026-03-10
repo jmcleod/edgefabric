@@ -47,6 +47,8 @@ type Services struct {
 	Metrics         *observability.Metrics
 	Logger          *slog.Logger
 	StaticFS        fs.FS // Embedded SPA files (web.StaticFiles)
+	CORSOrigins     []string // Allowed CORS origins (empty = same-origin only).
+	TLSEnabled      bool     // When true, HSTS headers are set.
 }
 
 // NewRouter assembles the full HTTP handler with all middleware and routes.
@@ -55,6 +57,10 @@ func NewRouter(svc Services) http.Handler {
 
 	// Auth middleware (shared by all protected routes).
 	authMW := middleware.Auth(svc.TokenSvc, svc.AuthSvc, middleware.WithMetrics(svc.Metrics))
+
+	// Rate limiter for sensitive endpoints (login, enrollment, API key generation).
+	// 10 requests/second with burst of 20 per client IP.
+	rateLimiter := middleware.NewRateLimiter(10, 20)
 
 	// Register API v1 handlers.
 	tenantHandler := v1.NewTenantHandler(svc.TenantSvc, svc.Authorizer, svc.AuditLog)
@@ -91,7 +97,7 @@ func NewRouter(svc Services) http.Handler {
 		provisioningHandler := v1.NewProvisioningHandler(svc.ProvisioningSvc, svc.Authorizer, svc.AuditLog)
 		provisioningHandler.Register(mux, authMW)
 
-		enrollmentHandler := v1.NewEnrollmentHandler(svc.ProvisioningSvc, svc.AuditLog)
+		enrollmentHandler := v1.NewEnrollmentHandler(svc.ProvisioningSvc, svc.TokenSvc, svc.AuditLog)
 		enrollmentHandler.Register(mux) // No auth — token-based.
 	}
 
@@ -163,12 +169,22 @@ func NewRouter(svc Services) http.Handler {
 		mux.Handle("/", SPAHandler(svc.StaticFS))
 	}
 
-	// Apply global middleware: security headers → recover → request ID → metrics → logging.
-	// Order: outermost (security headers) runs first on every request.
+	// CORS middleware (only active when origins are configured).
+	corsCfg := middleware.DefaultCORSConfig()
+	corsCfg.AllowedOrigins = svc.CORSOrigins
+
+	// Apply global middleware: CORS → security headers → recover → request ID → rate limit → metrics → logging.
 	handler := middleware.Chain(mux,
-		middleware.SecurityHeaders(),
+		middleware.CORS(corsCfg),
+		middleware.SecurityHeaders(svc.TLSEnabled),
 		middleware.Recover(svc.Logger),
 		middleware.RequestID(),
+		rateLimiter.Middleware(
+			"/api/v1/auth/login",
+			"/api/v1/auth/totp/verify",
+			"/api/v1/api-keys",
+			"/api/v1/enroll",
+		),
 		middleware.Metrics(svc.Metrics),
 		middleware.Logging(svc.Logger),
 	)

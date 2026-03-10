@@ -34,6 +34,7 @@ type DefaultProvisioner struct {
 	secrets       *secrets.Store
 	wgConfig      config.WireGuardHub
 	extURL        string // Controller external URL for node config.
+	binaryPath    string // Local path to the edgefabric binary for SCP upload.
 	wgConfigGen   WireGuardConfigGenerator // Optional: for WireGuard config sync.
 }
 
@@ -60,6 +61,12 @@ func NewProvisioner(
 		wgConfig:  wgConfig,
 		extURL:    externalURL,
 	}
+}
+
+// SetBinaryPath sets the local path to the edgefabric binary for SCP upload
+// during enrollment and upgrade operations.
+func (p *DefaultProvisioner) SetBinaryPath(path string) {
+	p.binaryPath = path
 }
 
 // SetWireGuardConfigGenerator sets the WireGuard config generator for config sync.
@@ -185,6 +192,25 @@ func (p *DefaultProvisioner) runPipeline(ctx context.Context, job *domain.Provis
 			result.Error = err.Error()
 			results = append(results, result)
 
+			// On upgrade failure past the backup step, attempt automatic rollback.
+			if job.Action == domain.ProvisionActionUpgrade && p.shouldRollback(steps, step) {
+				rbStart := time.Now().UTC()
+				rbOutput, rbErr := p.stepRollback(ctx, node)
+				rbResult := domain.StepResult{
+					Step:       domain.StepRollback,
+					StartedAt:  rbStart,
+					DurationMs: time.Since(rbStart).Milliseconds(),
+					Output:     rbOutput,
+				}
+				if rbErr != nil {
+					rbResult.Status = "failed"
+					rbResult.Error = rbErr.Error()
+				} else {
+					rbResult.Status = "success"
+				}
+				results = append(results, rbResult)
+			}
+
 			// Record failure and exit.
 			completedAt := time.Now().UTC()
 			job.Status = domain.ProvisionStatusFailed
@@ -230,6 +256,21 @@ func (p *DefaultProvisioner) updateNodeStatusAfterCompletion(ctx context.Context
 		node.Status = domain.NodeStatusDecommissioned
 	}
 	_ = p.nodes.UpdateNode(ctx, node)
+}
+
+// shouldRollback returns true if the failed step occurred after a backup was
+// taken, meaning a rollback is meaningful.
+func (p *DefaultProvisioner) shouldRollback(steps []domain.ProvisioningStep, failedStep domain.ProvisioningStep) bool {
+	backupSeen := false
+	for _, s := range steps {
+		if s == domain.StepBackupBinary {
+			backupSeen = true
+		}
+		if s == failedStep {
+			return backupSeen
+		}
+	}
+	return false
 }
 
 // --- Job queries ---

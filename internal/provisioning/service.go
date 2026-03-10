@@ -35,7 +35,7 @@ type Service interface {
 	// Enrollment tokens.
 	GenerateEnrollmentToken(ctx context.Context, tenantID, targetID domain.ID) (*domain.EnrollmentToken, error)
 	ValidateEnrollmentToken(ctx context.Context, token string) (*domain.EnrollmentToken, error)
-	CompleteEnrollment(ctx context.Context, token string) error
+	CompleteEnrollment(ctx context.Context, token string) (*EnrollmentResult, error)
 
 	// SSH key management.
 	RotateSSHKey(ctx context.Context, keyID domain.ID) (*domain.SSHKey, error)

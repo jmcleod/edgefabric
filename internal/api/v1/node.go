@@ -117,6 +117,14 @@ func (h *NodeHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// When cursor-based pagination is used, compute next_cursor from last item.
+	if params.Cursor != "" && len(nodes) == params.Limit {
+		last := nodes[len(nodes)-1]
+		nextCursor := storage.EncodeCursor(last.CreatedAt, last.ID.String())
+		apiutil.CursorListJSON(w, nodes, total, params.Limit, nextCursor)
+		return
+	}
+
 	apiutil.ListJSON(w, nodes, total, params.Offset, params.Limit)
 }
 

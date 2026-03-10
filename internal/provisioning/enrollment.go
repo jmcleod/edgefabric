@@ -18,6 +18,14 @@ const (
 	enrollmentTokenLength = 32
 )
 
+// EnrollmentResult is returned by CompleteEnrollment with the data the
+// node agent needs to start polling for configuration.
+type EnrollmentResult struct {
+	NodeID     domain.ID  `json:"node_id"`
+	TenantID   *domain.ID `json:"tenant_id,omitempty"`
+	WireGuardIP string    `json:"wireguard_ip"`
+}
+
 // GenerateEnrollmentToken creates a one-time enrollment token for a node.
 func (p *DefaultProvisioner) GenerateEnrollmentToken(ctx context.Context, tenantID, targetID domain.ID) (*domain.EnrollmentToken, error) {
 	tokenStr, err := crypto.GenerateRandomString(enrollmentTokenLength)
@@ -58,17 +66,19 @@ func (p *DefaultProvisioner) ValidateEnrollmentToken(ctx context.Context, tokenS
 
 // CompleteEnrollment validates the token, generates WireGuard keys,
 // allocates an overlay IP, marks the token used, and transitions the node to online.
-func (p *DefaultProvisioner) CompleteEnrollment(ctx context.Context, tokenStr string) error {
+// Returns an EnrollmentResult so the node agent can persist its identity and start
+// polling for configuration.
+func (p *DefaultProvisioner) CompleteEnrollment(ctx context.Context, tokenStr string) (*EnrollmentResult, error) {
 	// Validate token.
 	token, err := p.ValidateEnrollmentToken(ctx, tokenStr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Get the target node.
 	node, err := p.nodes.GetNode(ctx, token.TargetID)
 	if err != nil {
-		return fmt.Errorf("get target node: %w", err)
+		return nil, fmt.Errorf("get target node: %w", err)
 	}
 
 	// Generate WireGuard keys if not already assigned.
@@ -77,36 +87,36 @@ func (p *DefaultProvisioner) CompleteEnrollment(ctx context.Context, tokenStr st
 		// No peer yet — generate keys + allocate IP.
 		kp, err := GenerateWireGuardKeyPair()
 		if err != nil {
-			return fmt.Errorf("generate WG key pair: %w", err)
+			return nil, fmt.Errorf("generate WG key pair: %w", err)
 		}
 
 		psk, err := GeneratePresharedKey()
 		if err != nil {
-			return fmt.Errorf("generate preshared key: %w", err)
+			return nil, fmt.Errorf("generate preshared key: %w", err)
 		}
 
 		encPriv, err := p.secrets.Encrypt(kp.PrivateKey)
 		if err != nil {
-			return fmt.Errorf("encrypt WG private key: %w", err)
+			return nil, fmt.Errorf("encrypt WG private key: %w", err)
 		}
 
 		encPSK, err := p.secrets.Encrypt(psk)
 		if err != nil {
-			return fmt.Errorf("encrypt preshared key: %w", err)
+			return nil, fmt.Errorf("encrypt preshared key: %w", err)
 		}
 
 		peers, _, err := p.peers.ListWireGuardPeers(ctx, storage.ListParams{Limit: 10000})
 		if err != nil {
-			return fmt.Errorf("list WG peers: %w", err)
+			return nil, fmt.Errorf("list WG peers: %w", err)
 		}
 		nodes, _, err := p.nodes.ListNodes(ctx, nil, storage.ListParams{Limit: 10000})
 		if err != nil {
-			return fmt.Errorf("list nodes: %w", err)
+			return nil, fmt.Errorf("list nodes: %w", err)
 		}
 
 		overlayIP, err := AllocateOverlayIP(p.wgConfig.Subnet, p.wgConfig.Address, peers, nodes)
 		if err != nil {
-			return fmt.Errorf("allocate overlay IP: %w", err)
+			return nil, fmt.Errorf("allocate overlay IP: %w", err)
 		}
 
 		peer := &domain.WireGuardPeer{
@@ -120,24 +130,28 @@ func (p *DefaultProvisioner) CompleteEnrollment(ctx context.Context, tokenStr st
 			Endpoint:      fmt.Sprintf("%s:%d", node.PublicIP, p.wgConfig.ListenPort),
 		}
 		if err := p.peers.CreateWireGuardPeer(ctx, peer); err != nil {
-			return fmt.Errorf("create WG peer: %w", err)
+			return nil, fmt.Errorf("create WG peer: %w", err)
 		}
 
 		node.WireGuardIP = overlayIP
 	} else if err != nil {
-		return fmt.Errorf("check existing WG peer: %w", err)
+		return nil, fmt.Errorf("check existing WG peer: %w", err)
 	}
 
 	// Mark token as used.
 	if err := p.tokens.MarkEnrollmentTokenUsed(ctx, token.ID); err != nil {
-		return fmt.Errorf("mark token used: %w", err)
+		return nil, fmt.Errorf("mark token used: %w", err)
 	}
 
 	// Transition node to online.
 	node.Status = domain.NodeStatusOnline
 	if err := p.nodes.UpdateNode(ctx, node); err != nil {
-		return fmt.Errorf("update node status: %w", err)
+		return nil, fmt.Errorf("update node status: %w", err)
 	}
 
-	return nil
+	return &EnrollmentResult{
+		NodeID:      node.ID,
+		TenantID:    node.TenantID,
+		WireGuardIP: node.WireGuardIP,
+	}, nil
 }

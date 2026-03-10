@@ -51,9 +51,13 @@ type SchemaVersioner interface {
 }
 
 // ListParams provides common pagination parameters.
+// Supports both offset-based and cursor-based pagination.
+// When Cursor is non-empty, Offset is ignored and cursor-based
+// pagination is used instead.
 type ListParams struct {
 	Offset int
 	Limit  int
+	Cursor string // Opaque cursor token for cursor-based pagination.
 }
 
 // DefaultLimit is the default page size.

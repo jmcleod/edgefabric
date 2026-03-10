@@ -5,8 +5,9 @@ import "net/http"
 // SecurityHeaders returns middleware that sets common HTTP security headers
 // on every response. These provide defense-in-depth against common web
 // attacks (clickjacking, MIME sniffing, XSS reflection).
-// FUTURE: Add configurable CORS and HSTS when TLS is enforced.
-func SecurityHeaders() func(http.Handler) http.Handler {
+// When tlsEnabled is true, HSTS is added to enforce HTTPS.
+func SecurityHeaders(tlsEnabled ...bool) func(http.Handler) http.Handler {
+	hsts := len(tlsEnabled) > 0 && tlsEnabled[0]
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -16,6 +17,9 @@ func SecurityHeaders() func(http.Handler) http.Handler {
 			// Modern recommendation: disable X-XSS-Protection to avoid
 			// edge-case XSS vulnerabilities in older browsers.
 			w.Header().Set("X-XSS-Protection", "0")
+			if hsts {
+				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			}
 			next.ServeHTTP(w, r)
 		})
 	}

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/provisioning"
 	"github.com/jmcleod/edgefabric/internal/secrets"
 	"github.com/jmcleod/edgefabric/internal/storage"
 )
@@ -303,6 +305,54 @@ func (s *DefaultService) GenerateNodeConfig(ctx context.Context, nodeID domain.I
 	}
 
 	return cfg.Render(), nil
+}
+
+// --- WireGuard Key Rotation ---
+
+func (s *DefaultService) RotateWireGuardKeys(ctx context.Context, peerID domain.ID) (*domain.WireGuardPeer, error) {
+	peer, err := s.peers.GetWireGuardPeer(ctx, peerID)
+	if err != nil {
+		return nil, fmt.Errorf("get wireguard peer: %w", err)
+	}
+
+	// Generate new Curve25519 keypair.
+	kp, err := provisioning.GenerateWireGuardKeyPair()
+	if err != nil {
+		return nil, fmt.Errorf("generate new wireguard keypair: %w", err)
+	}
+
+	// Encrypt new private key.
+	encPriv, err := s.secrets.Encrypt(kp.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt new private key: %w", err)
+	}
+
+	// Generate new preshared key.
+	psk, err := provisioning.GeneratePresharedKey()
+	if err != nil {
+		return nil, fmt.Errorf("generate new preshared key: %w", err)
+	}
+	encPSK, err := s.secrets.Encrypt(psk)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt new preshared key: %w", err)
+	}
+
+	// Update the peer record.
+	now := time.Now().UTC()
+	peer.PublicKey = kp.PublicKey
+	peer.PrivateKey = encPriv
+	peer.PresharedKey = encPSK
+	peer.LastRotatedAt = now
+	peer.UpdatedAt = now
+
+	if err := s.peers.UpdateWireGuardPeer(ctx, peer); err != nil {
+		return nil, fmt.Errorf("update wireguard peer: %w", err)
+	}
+
+	// Don't return private key in response.
+	peer.PrivateKey = ""
+	peer.PresharedKey = ""
+	return peer, nil
 }
 
 // --- Node Networking State ---

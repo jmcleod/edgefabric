@@ -3,6 +3,7 @@ package provisioning
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/jmcleod/edgefabric/internal/domain"
@@ -37,6 +38,12 @@ func (p *DefaultProvisioner) executeStep(ctx context.Context, step domain.Provis
 		return p.stepSendCommand(ctx, job, node)
 	case domain.StepCleanup:
 		return p.stepCleanup(ctx, node)
+	case domain.StepBackupBinary:
+		return p.stepBackupBinary(ctx, node)
+	case domain.StepAtomicSwap:
+		return p.stepAtomicSwap(ctx, node)
+	case domain.StepRollback:
+		return p.stepRollback(ctx, node)
 	default:
 		return "", fmt.Errorf("unknown step: %s", step)
 	}
@@ -91,21 +98,96 @@ func (p *DefaultProvisioner) stepValidateSSH(ctx context.Context, node *domain.N
 	return output, nil
 }
 
+const (
+	remoteBinaryPath    = "/usr/local/bin/edgefabric"
+	remoteBinaryStaging = "/usr/local/bin/edgefabric.new"
+	remoteBinaryBackup  = "/usr/local/bin/edgefabric.bak"
+)
+
 func (p *DefaultProvisioner) stepUploadBinary(ctx context.Context, node *domain.Node) (string, error) {
+	if p.binaryPath == "" {
+		return "", fmt.Errorf("binary_path not configured on provisioner")
+	}
+
+	f, err := os.Open(p.binaryPath)
+	if err != nil {
+		return "", fmt.Errorf("open binary %s: %w", p.binaryPath, err)
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return "", fmt.Errorf("stat binary: %w", err)
+	}
+
 	session, err := p.connectToNode(ctx, node)
 	if err != nil {
 		return "", err
 	}
 	defer session.Close()
 
-	// Upload the edgefabric binary.
-	// In production, this would read from an embedded binary or artifact store.
-	// For now, we upload a placeholder and record the intent.
-	output, err := session.Run("mkdir -p /usr/local/bin && echo binary-upload-ready")
-	if err != nil {
-		return output, fmt.Errorf("prepare binary upload: %w", err)
+	// Ensure target directory exists.
+	if output, err := session.Run("mkdir -p /usr/local/bin"); err != nil {
+		return output, fmt.Errorf("create /usr/local/bin: %w", err)
 	}
-	return "binary upload prepared (placeholder)", nil
+
+	// SCP the binary to a staging path so we can atomically swap later.
+	if err := session.Upload(f, remoteBinaryStaging, fi.Size(), 0755); err != nil {
+		return "", fmt.Errorf("upload binary via SCP: %w", err)
+	}
+
+	return fmt.Sprintf("binary uploaded to %s (%d bytes)", remoteBinaryStaging, fi.Size()), nil
+}
+
+func (p *DefaultProvisioner) stepBackupBinary(ctx context.Context, node *domain.Node) (string, error) {
+	session, err := p.connectToNode(ctx, node)
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	// Back up the current binary if it exists; skip silently if it doesn't.
+	output, err := session.Run(fmt.Sprintf(
+		"if [ -f %s ]; then cp %s %s && echo backed-up; else echo no-existing-binary; fi",
+		remoteBinaryPath, remoteBinaryPath, remoteBinaryBackup,
+	))
+	if err != nil {
+		return output, fmt.Errorf("backup binary: %w", err)
+	}
+	return output, nil
+}
+
+func (p *DefaultProvisioner) stepAtomicSwap(ctx context.Context, node *domain.Node) (string, error) {
+	session, err := p.connectToNode(ctx, node)
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	// mv on the same filesystem is atomic.
+	output, err := session.Run(fmt.Sprintf("mv %s %s", remoteBinaryStaging, remoteBinaryPath))
+	if err != nil {
+		return output, fmt.Errorf("atomic swap: %w", err)
+	}
+	return "binary swapped atomically", nil
+}
+
+func (p *DefaultProvisioner) stepRollback(ctx context.Context, node *domain.Node) (string, error) {
+	session, err := p.connectToNode(ctx, node)
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	// Restore backup and restart the service.
+	output, err := session.Run(fmt.Sprintf(
+		"if [ -f %s ]; then mv %s %s && systemctl restart edgefabric && echo rolled-back; else echo no-backup-available; fi",
+		remoteBinaryBackup, remoteBinaryBackup, remoteBinaryPath,
+	))
+	if err != nil {
+		return output, fmt.Errorf("rollback: %w", err)
+	}
+	return output, nil
 }
 
 func (p *DefaultProvisioner) stepWriteConfig(ctx context.Context, job *domain.ProvisioningJob, node *domain.Node) (string, error) {

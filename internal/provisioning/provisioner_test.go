@@ -3,6 +3,8 @@ package provisioning_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -61,6 +63,14 @@ func setupTestEnv(t *testing.T) *testEnv {
 		wgConfig,
 		"https://controller.example.com",
 	)
+
+	// Create a temporary fake binary for upload tests.
+	tmpDir := t.TempDir()
+	fakeBinary := filepath.Join(tmpDir, "edgefabric")
+	if err := os.WriteFile(fakeBinary, []byte("fake-binary-content"), 0755); err != nil {
+		t.Fatalf("write fake binary: %v", err)
+	}
+	p.SetBinaryPath(fakeBinary)
 
 	return &testEnv{
 		store:       store,

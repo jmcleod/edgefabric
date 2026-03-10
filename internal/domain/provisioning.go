@@ -44,6 +44,9 @@ const (
 	StepStopService    ProvisioningStep = "stop_service"
 	StepCleanup        ProvisioningStep = "cleanup"
 	StepSendCommand    ProvisioningStep = "send_command"
+	StepBackupBinary   ProvisioningStep = "backup_binary"
+	StepAtomicSwap     ProvisioningStep = "atomic_swap"
+	StepRollback       ProvisioningStep = "rollback"
 )
 
 // ProvisioningJob tracks a provisioning operation on a node.

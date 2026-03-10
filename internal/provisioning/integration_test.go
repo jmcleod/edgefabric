@@ -97,13 +97,13 @@ func TestFullEnrollmentFlow(t *testing.T) {
 	}
 
 	// Step 9: Complete enrollment using the token we generated earlier.
-	err = env.provisioner.CompleteEnrollment(ctx, token.Token)
+	_, err = env.provisioner.CompleteEnrollment(ctx, token.Token)
 	if err != nil {
 		t.Fatalf("complete enrollment: %v", err)
 	}
 
 	// Step 10: Token reuse should fail.
-	err = env.provisioner.CompleteEnrollment(ctx, token.Token)
+	_, err = env.provisioner.CompleteEnrollment(ctx, token.Token)
 	if err == nil {
 		t.Error("expected error for reused enrollment token")
 	}

@@ -78,9 +78,12 @@ func TestCompleteEnrollment(t *testing.T) {
 	}
 
 	// Complete enrollment.
-	err = env.provisioner.CompleteEnrollment(ctx, token.Token)
+	result, err := env.provisioner.CompleteEnrollment(ctx, token.Token)
 	if err != nil {
 		t.Fatalf("complete enrollment: %v", err)
+	}
+	if result.NodeID != node.ID {
+		t.Errorf("expected node ID %s, got %s", node.ID, result.NodeID)
 	}
 
 	// Verify node is online.
@@ -105,7 +108,7 @@ func TestCompleteEnrollment(t *testing.T) {
 	}
 
 	// Verify token is used — reuse should fail.
-	err = env.provisioner.CompleteEnrollment(ctx, token.Token)
+	_, err = env.provisioner.CompleteEnrollment(ctx, token.Token)
 	if err == nil {
 		t.Fatal("expected error for reused token")
 	}

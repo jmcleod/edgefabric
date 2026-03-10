@@ -32,6 +32,27 @@ func TestSecurityHeaders(t *testing.T) {
 			t.Errorf("header %s = %q, want %q", header, got, want)
 		}
 	}
+
+	// HSTS should NOT be set without TLS.
+	if got := w.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Errorf("expected no HSTS header without TLS, got %q", got)
+	}
+}
+
+func TestSecurityHeaders_WithTLS(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := SecurityHeaders(true)(inner)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/test", nil)
+	handler.ServeHTTP(w, r)
+
+	hsts := w.Header().Get("Strict-Transport-Security")
+	if hsts != "max-age=31536000; includeSubDomains" {
+		t.Errorf("expected HSTS header, got %q", hsts)
+	}
 }
 
 func TestMaxBodySize_AcceptsSmallBody(t *testing.T) {

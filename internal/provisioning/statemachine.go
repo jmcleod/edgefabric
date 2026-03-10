@@ -20,8 +20,11 @@ func PipelineFor(action domain.ProvisioningAction) []domain.ProvisioningStep {
 	case domain.ProvisionActionUpgrade:
 		return []domain.ProvisioningStep{
 			domain.StepValidateSSH,
+			domain.StepBackupBinary,
 			domain.StepUploadBinary,
-			domain.StepSendCommand, // restart
+			domain.StepStopService,
+			domain.StepAtomicSwap,
+			domain.StepStartService,
 			domain.StepVerifyOnline,
 		}
 	case domain.ProvisionActionStart:

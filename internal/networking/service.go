@@ -32,6 +32,9 @@ type Service interface {
 	// WireGuard peer listing (read-only view for API).
 	ListWireGuardPeers(ctx context.Context, params storage.ListParams) ([]*domain.WireGuardPeer, int, error)
 
+	// WireGuard key rotation — generates new keypair, updates peer, returns new public key.
+	RotateWireGuardKeys(ctx context.Context, peerID domain.ID) (*domain.WireGuardPeer, error)
+
 	// Node networking state (aggregated view).
 	GetNodeNetworkingState(ctx context.Context, nodeID domain.ID) (*NodeNetworkingState, error)
 }
