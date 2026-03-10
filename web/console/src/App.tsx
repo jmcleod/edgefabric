@@ -25,6 +25,8 @@ import CDNSiteDetailPage from "./pages/CDNSiteDetailPage";
 import RoutesPage from "./pages/RoutesPage";
 import RouteDetailPage from "./pages/RouteDetailPage";
 import ProvisioningJobsPage from "./pages/ProvisioningJobsPage";
+import SSHKeysPage from "./pages/SSHKeysPage";
+import APIKeysPage from "./pages/APIKeysPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import NotFound from "./pages/NotFound";
 
@@ -63,6 +65,7 @@ const App = () => (
               <Route path="/networking/bgp" element={<RequireAuth><BGPPage /></RequireAuth>} />
               <Route path="/networking/ips" element={<RequireAuth><IPAllocationsPage /></RequireAuth>} />
               <Route path="/jobs" element={<RequireAuth><ProvisioningJobsPage /></RequireAuth>} />
+              <Route path="/ssh-keys" element={<RequireAuth><SSHKeysPage /></RequireAuth>} />
               <Route path="/audit" element={<RequireAuth><AuditLogsPage /></RequireAuth>} />
 
               {/* Tenant-scoped routes */}
@@ -72,6 +75,7 @@ const App = () => (
               <Route path="/tenant/cdn/services/:id" element={<RequireAuth><CDNSiteDetailPage /></RequireAuth>} />
               <Route path="/tenant/routes" element={<RequireAuth><RoutesPage /></RequireAuth>} />
               <Route path="/tenant/routes/:id" element={<RequireAuth><RouteDetailPage /></RequireAuth>} />
+              <Route path="/tenant/api-keys" element={<RequireAuth><APIKeysPage /></RequireAuth>} />
 
               {/* Placeholder routes — will be replaced in later phases */}
               <Route path="/fleet-health" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />

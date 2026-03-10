@@ -1,11 +1,20 @@
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useNodes } from '@/hooks/useNodes';
 import { useProvisioningJobs } from '@/hooks/useProvisioning';
 import { RefreshCw, CheckCircle, XCircle, Clock, Play } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const statusConfig = {
   pending: { icon: Clock, color: 'text-status-warning', bg: 'bg-status-warning/10' },
@@ -15,7 +24,11 @@ const statusConfig = {
 };
 
 export default function ProvisioningJobsPage() {
-  const { data, isLoading } = useProvisioningJobs();
+  const { data: nodesData } = useNodes();
+  const nodes = nodesData?.items || [];
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
+
+  const { data, isLoading } = useProvisioningJobs(selectedNodeId || undefined);
   const jobs = data?.items || [];
 
   return (
@@ -26,7 +39,26 @@ export default function ProvisioningJobsPage() {
         icon={RefreshCw}
       />
 
-      {isLoading ? (
+      <div className="mb-4 max-w-xs">
+        <Select value={selectedNodeId} onValueChange={setSelectedNodeId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a node..." />
+          </SelectTrigger>
+          <SelectContent>
+            {nodes.map((node) => (
+              <SelectItem key={node.id} value={node.id}>
+                {node.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {!selectedNodeId ? (
+        <div className="text-center py-16 text-muted-foreground">
+          Select a node above to view its provisioning jobs.
+        </div>
+      ) : isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-40" />
           <Skeleton className="h-40" />
@@ -35,7 +67,7 @@ export default function ProvisioningJobsPage() {
       ) : jobs.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <RefreshCw className="h-12 w-12 mx-auto mb-4 opacity-30" />
-          <p>No provisioning jobs found</p>
+          <p>No provisioning jobs found for this node</p>
         </div>
       ) : (
         <div className="space-y-4">
