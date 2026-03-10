@@ -16,13 +16,14 @@ import (
 // ProvisioningHandler handles provisioning lifecycle endpoints.
 type ProvisioningHandler struct {
 	svc        provisioning.Service
+	nodes      storage.NodeStore
 	authorizer rbac.Authorizer
 	audit      audit.Logger
 }
 
 // NewProvisioningHandler creates a new provisioning handler.
-func NewProvisioningHandler(svc provisioning.Service, authorizer rbac.Authorizer, audit audit.Logger) *ProvisioningHandler {
-	return &ProvisioningHandler{svc: svc, authorizer: authorizer, audit: audit}
+func NewProvisioningHandler(svc provisioning.Service, nodes storage.NodeStore, authorizer rbac.Authorizer, audit audit.Logger) *ProvisioningHandler {
+	return &ProvisioningHandler{svc: svc, nodes: nodes, authorizer: authorizer, audit: audit}
 }
 
 // Register mounts provisioning routes on the mux.
@@ -39,6 +40,9 @@ func (h *ProvisioningHandler) Register(mux *http.ServeMux, authMW func(http.Hand
 	mux.Handle("POST /api/v1/nodes/{id}/upgrade", middleware.Chain(http.HandlerFunc(h.Action), authMW, requireCreate))
 	mux.Handle("POST /api/v1/nodes/{id}/reprovision", middleware.Chain(http.HandlerFunc(h.Action), authMW, requireCreate))
 	mux.Handle("POST /api/v1/nodes/{id}/decommission", middleware.Chain(http.HandlerFunc(h.Action), authMW, requireCreate))
+
+	// Enrollment token generation: POST /api/v1/nodes/{id}/enrollment-token
+	mux.Handle("POST /api/v1/nodes/{id}/enrollment-token", middleware.Chain(http.HandlerFunc(h.GenerateToken), authMW, requireCreate))
 
 	// Job queries.
 	mux.Handle("GET /api/v1/nodes/{id}/jobs", middleware.Chain(http.HandlerFunc(h.ListNodeJobs), authMW, requireList))
@@ -147,6 +151,54 @@ func (h *ProvisioningHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiutil.JSON(w, http.StatusOK, job)
+}
+
+// GenerateToken handles POST /api/v1/nodes/{id}/enrollment-token.
+// It generates a one-time enrollment token for the specified node, enabling
+// out-of-band enrollment workflows (e.g., Docker demos, manual provisioning).
+func (h *ProvisioningHandler) GenerateToken(w http.ResponseWriter, r *http.Request) {
+	nodeID, err := apiutil.ParseID(r, "id")
+	if err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	// Look up the node to get its tenant ID.
+	node, err := h.nodes.GetNode(r.Context(), nodeID)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get node")
+		return
+	}
+
+	tenantID := domain.ID{}
+	if node.TenantID != nil {
+		tenantID = *node.TenantID
+	}
+
+	token, err := h.svc.GenerateEnrollmentToken(r.Context(), tenantID, nodeID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to generate enrollment token")
+		return
+	}
+
+	claims := middleware.ClaimsFromContext(r.Context())
+	h.audit.Log(r.Context(), audit.Event{
+		TenantID: claims.TenantID,
+		UserID:   &claims.UserID,
+		Action:   "generate_enrollment_token",
+		Resource: "node",
+		Details:  map[string]string{"node_id": nodeID.String()},
+		SourceIP: r.RemoteAddr,
+	})
+
+	apiutil.JSON(w, http.StatusOK, map[string]any{
+		"token":      token.Token,
+		"expires_at": token.ExpiresAt,
+	})
 }
 
 // extractAction extracts the last path segment (the action) from a URL path.

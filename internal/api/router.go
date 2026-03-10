@@ -94,7 +94,7 @@ func NewRouter(svc Services) http.Handler {
 
 	// Provisioning and enrollment handlers.
 	if svc.ProvisioningSvc != nil {
-		provisioningHandler := v1.NewProvisioningHandler(svc.ProvisioningSvc, svc.Authorizer, svc.AuditLog)
+		provisioningHandler := v1.NewProvisioningHandler(svc.ProvisioningSvc, svc.NodeStore, svc.Authorizer, svc.AuditLog)
 		provisioningHandler.Register(mux, authMW)
 
 		enrollmentHandler := v1.NewEnrollmentHandler(svc.ProvisioningSvc, svc.TokenSvc, svc.AuditLog)
