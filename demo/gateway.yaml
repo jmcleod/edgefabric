@@ -1,0 +1,20 @@
+# EdgeFabric Gateway — Docker Demo Configuration
+#
+# Runs in noop mode since the gateway reconciliation loop requires
+# WireGuard overlay networking which isn't available in plain Docker.
+
+role: gateway
+log_level: info
+
+gateway:
+  # Controller address on the Docker bridge network (no TLS in demo).
+  controller_addr: "http://172.20.0.2:8443"
+
+  data_dir: /var/lib/edgefabric
+  health_addr: ":9090"
+
+  # Gateway's overlay IP (simulated in demo).
+  wireguard_ip: "10.100.0.50"
+
+  # Noop — real forwarding needs WireGuard mesh.
+  route_mode: "noop"

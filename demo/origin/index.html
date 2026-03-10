@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EdgeFabric Demo Origin</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
+  .container{max-width:640px;width:100%}
+  h1{font-size:1.75rem;font-weight:700;margin-bottom:.25rem;color:#f8fafc}
+  .subtitle{color:#94a3b8;margin-bottom:2rem;font-size:.9rem}
+  .card{background:#1e293b;border:1px solid #334155;border-radius:.75rem;padding:1.5rem;margin-bottom:1.25rem}
+  .card h2{font-size:1rem;font-weight:600;margin-bottom:1rem;color:#38bdf8;display:flex;align-items:center;gap:.5rem}
+  .card h2::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:#38bdf8}
+  .row{display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #334155}
+  .row:last-child{border-bottom:none}
+  .label{color:#94a3b8;font-size:.85rem}
+  .value{font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:.85rem;color:#f8fafc;word-break:break-all}
+  .badge{display:inline-block;padding:.15rem .5rem;border-radius:.25rem;font-size:.75rem;font-weight:600}
+  .badge-direct{background:#164e63;color:#22d3ee}
+  .badge-cdn{background:#14532d;color:#4ade80}
+  button{background:#2563eb;color:#fff;border:none;padding:.6rem 1.25rem;border-radius:.5rem;font-size:.85rem;cursor:pointer;font-weight:500;width:100%}
+  button:hover{background:#1d4ed8}
+  button:active{background:#1e40af}
+  #headers-output{margin-top:1rem;font-family:monospace;font-size:.8rem;white-space:pre-wrap;color:#a5b4fc;max-height:200px;overflow-y:auto}
+  .footer{text-align:center;color:#475569;font-size:.75rem;margin-top:2rem}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>EdgeFabric Demo Origin</h1>
+  <p class="subtitle">Test HTTP server for CDN reverse proxy and route forwarding demos</p>
+
+  <div class="card">
+    <h2>Request Info</h2>
+    <div class="row">
+      <span class="label">Access method</span>
+      <span class="value" id="access-method">detecting&hellip;</span>
+    </div>
+    <div class="row">
+      <span class="label">Current URL</span>
+      <span class="value" id="current-url"></span>
+    </div>
+    <div class="row">
+      <span class="label">Host header</span>
+      <span class="value" id="host-header"></span>
+    </div>
+    <div class="row">
+      <span class="label">Port</span>
+      <span class="value" id="port"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>CDN Header Check</h2>
+    <p style="color:#94a3b8;font-size:.85rem;margin-bottom:1rem">
+      Fetch this page and inspect response headers to detect CDN cache status.
+    </p>
+    <button onclick="checkHeaders()">Check CDN Headers</button>
+    <div id="headers-output"></div>
+  </div>
+
+  <div class="card">
+    <h2>Quick Reference</h2>
+    <div class="row">
+      <span class="label">Origin direct</span>
+      <span class="value">http://localhost:8888</span>
+    </div>
+    <div class="row">
+      <span class="label">CDN (node-1)</span>
+      <span class="value">curl -H "Host: www.acme.example" http://localhost:8081</span>
+    </div>
+    <div class="row">
+      <span class="label">CDN (node-2)</span>
+      <span class="value">curl -H "Host: www.acme.example" http://localhost:8082</span>
+    </div>
+    <div class="row">
+      <span class="label">Health check</span>
+      <span class="value">/healthz</span>
+    </div>
+  </div>
+
+  <div class="footer">EdgeFabric Demo &mdash; not for production use</div>
+</div>
+
+<script>
+(function() {
+  var loc = window.location;
+  document.getElementById('current-url').textContent = loc.href;
+  document.getElementById('host-header').textContent = loc.hostname;
+  document.getElementById('port').textContent = loc.port || (loc.protocol === 'https:' ? '443' : '80');
+
+  var port = loc.port;
+  var el = document.getElementById('access-method');
+  if (port === '8888') {
+    el.innerHTML = '<span class="badge badge-direct">Direct (Origin)</span>';
+  } else if (port === '8081' || port === '8082') {
+    el.innerHTML = '<span class="badge badge-cdn">Via CDN (node ' + (port === '8081' ? '1' : '2') + ')</span>';
+  } else {
+    el.innerHTML = '<span class="badge badge-direct">Port ' + port + '</span>';
+  }
+})();
+
+function checkHeaders() {
+  var out = document.getElementById('headers-output');
+  out.textContent = 'Fetching...\n';
+  fetch(window.location.href, {cache: 'no-store'}).then(function(resp) {
+    var lines = [];
+    resp.headers.forEach(function(v, k) {
+      lines.push(k + ': ' + v);
+    });
+    out.textContent = lines.sort().join('\n') || '(no headers visible — browser may hide some)';
+  }).catch(function(err) {
+    out.textContent = 'Error: ' + err.message;
+  });
+}
+</script>
+</body>
+</html>

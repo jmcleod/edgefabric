@@ -1,10 +1,11 @@
 #!/bin/sh
-# EdgeFabric Demo Setup Script
+# EdgeFabric Comprehensive Demo Setup Script
 #
-# Seeds the controller with sample data via the REST API.
+# Seeds the controller with multi-tenant sample data via the REST API.
+# Creates 2 tenants, 3 nodes, 2 gateways, DNS zones, CDN sites, routes,
+# BGP sessions, and generates enrollment tokens for the node agents.
+#
 # Requires: curl, jq (both available in the demo-setup container).
-#
-# This script is also useful as a reference for API usage patterns.
 set -e
 
 CONTROLLER_URL="${CONTROLLER_URL:-http://controller:8443}"
@@ -88,41 +89,57 @@ if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
 fi
 ok "Logged in (token acquired)"
 
-# ---------------------------------------------------------------------------
-# 4. Create tenant
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# TENANT 1 — Acme Corp
+# ===========================================================================
 
 info "Creating tenant: Acme Corp..."
-TENANT_RESP=$(api POST /api/v1/tenants '{"name":"Acme Corp","slug":"acme"}')
-TENANT_ID=$(echo "$TENANT_RESP" | jq_data id)
-ok "Tenant created: $TENANT_ID"
-
-# ---------------------------------------------------------------------------
-# 5. Create tenant user
-# ---------------------------------------------------------------------------
+ACME_RESP=$(api POST /api/v1/tenants '{"name":"Acme Corp","slug":"acme"}')
+ACME_ID=$(echo "$ACME_RESP" | jq_data id)
+ok "Tenant created: $ACME_ID"
 
 info "Creating tenant user: ops@acme.example..."
-USER_RESP=$(api POST /api/v1/users "{
-  \"tenant_id\": \"$TENANT_ID\",
+ACME_USER_RESP=$(api POST /api/v1/users "{
+  \"tenant_id\": \"$ACME_ID\",
   \"email\": \"ops@acme.example\",
-  \"name\": \"Ops User\",
+  \"name\": \"Acme Ops\",
   \"password\": \"demo-password-123\",
   \"role\": \"admin\"
 }")
-USER_ID=$(echo "$USER_RESP" | jq_data id)
-ok "User created: $USER_ID"
+ACME_USER_ID=$(echo "$ACME_USER_RESP" | jq_data id)
+ok "User created: $ACME_USER_ID"
 
-# ---------------------------------------------------------------------------
-# 6. Create nodes
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# TENANT 2 — Globex Inc
+# ===========================================================================
+
+info "Creating tenant: Globex Inc..."
+GLOBEX_RESP=$(api POST /api/v1/tenants '{"name":"Globex Inc","slug":"globex"}')
+GLOBEX_ID=$(echo "$GLOBEX_RESP" | jq_data id)
+ok "Tenant created: $GLOBEX_ID"
+
+info "Creating tenant user: admin@globex.example..."
+GLOBEX_USER_RESP=$(api POST /api/v1/users "{
+  \"tenant_id\": \"$GLOBEX_ID\",
+  \"email\": \"admin@globex.example\",
+  \"name\": \"Globex Admin\",
+  \"password\": \"demo-password-456\",
+  \"role\": \"admin\"
+}")
+GLOBEX_USER_ID=$(echo "$GLOBEX_USER_RESP" | jq_data id)
+ok "User created: $GLOBEX_USER_ID"
+
+# ===========================================================================
+# NODES
+# ===========================================================================
 
 info "Creating node: edge-us-east-1..."
 NODE1_RESP=$(api POST /api/v1/nodes '{
   "name": "edge-us-east-1",
-  "hostname": "edge1.us-east-1.acme.example",
-  "public_ip": "203.0.113.10",
+  "hostname": "edge1.us-east-1.edgefabric.local",
+  "public_ip": "172.20.0.10",
   "region": "us-east-1",
-  "provider": "aws"
+  "provider": "docker"
 }')
 NODE1_ID=$(echo "$NODE1_RESP" | jq_data id)
 ok "Node created: $NODE1_ID"
@@ -130,180 +147,373 @@ ok "Node created: $NODE1_ID"
 info "Creating node: edge-eu-west-1..."
 NODE2_RESP=$(api POST /api/v1/nodes '{
   "name": "edge-eu-west-1",
-  "hostname": "edge1.eu-west-1.acme.example",
-  "public_ip": "198.51.100.20",
+  "hostname": "edge1.eu-west-1.edgefabric.local",
+  "public_ip": "172.20.0.11",
   "region": "eu-west-1",
-  "provider": "aws"
+  "provider": "docker"
 }')
 NODE2_ID=$(echo "$NODE2_RESP" | jq_data id)
 ok "Node created: $NODE2_ID"
 
-# Assign nodes to tenant.
-info "Assigning nodes to tenant..."
-api PUT "/api/v1/nodes/${NODE1_ID}" "{\"tenant_id\": \"$TENANT_ID\"}" > /dev/null
-api PUT "/api/v1/nodes/${NODE2_ID}" "{\"tenant_id\": \"$TENANT_ID\"}" > /dev/null
-ok "Nodes assigned to Acme Corp"
+info "Creating node: vps-staging (enrollment demo)..."
+VPS_RESP=$(api POST /api/v1/nodes '{
+  "name": "vps-staging",
+  "hostname": "vps.us-west-2.edgefabric.local",
+  "public_ip": "172.20.0.12",
+  "region": "us-west-2",
+  "provider": "docker"
+}')
+VPS_ID=$(echo "$VPS_RESP" | jq_data id)
+ok "Node created: $VPS_ID"
 
-# ---------------------------------------------------------------------------
-# 7. Create node group and add nodes
-# ---------------------------------------------------------------------------
+# Assign nodes to tenants.
+info "Assigning nodes to Acme Corp..."
+api PUT "/api/v1/nodes/${NODE1_ID}" "{\"tenant_id\": \"$ACME_ID\"}" > /dev/null
+api PUT "/api/v1/nodes/${NODE2_ID}" "{\"tenant_id\": \"$ACME_ID\"}" > /dev/null
+ok "node-1 and node-2 assigned to Acme Corp"
 
-info "Creating node group: global-edge..."
-GROUP_RESP=$(api POST /api/v1/node-groups "{
-  \"tenant_id\": \"$TENANT_ID\",
-  \"name\": \"global-edge\",
-  \"description\": \"Edge nodes across all regions\"
+info "Assigning VPS to Acme Corp..."
+api PUT "/api/v1/nodes/${VPS_ID}" "{\"tenant_id\": \"$ACME_ID\"}" > /dev/null
+ok "vps-staging assigned to Acme Corp"
+
+# ===========================================================================
+# NODE GROUPS
+# ===========================================================================
+
+info "Creating node group: acme-global-edge..."
+ACME_GROUP_RESP=$(api POST /api/v1/node-groups "{
+  \"tenant_id\": \"$ACME_ID\",
+  \"name\": \"acme-global-edge\",
+  \"description\": \"Acme Corp edge nodes across all regions\"
 }")
-GROUP_ID=$(echo "$GROUP_RESP" | jq_data id)
-ok "Node group created: $GROUP_ID"
+ACME_GROUP_ID=$(echo "$ACME_GROUP_RESP" | jq_data id)
+ok "Node group created: $ACME_GROUP_ID"
 
-info "Adding nodes to group..."
-api POST "/api/v1/node-groups/${GROUP_ID}/nodes/${NODE1_ID}" > /dev/null
-api POST "/api/v1/node-groups/${GROUP_ID}/nodes/${NODE2_ID}" > /dev/null
-ok "Nodes added to global-edge group"
+api POST "/api/v1/node-groups/${ACME_GROUP_ID}/nodes/${NODE1_ID}" > /dev/null
+api POST "/api/v1/node-groups/${ACME_GROUP_ID}/nodes/${NODE2_ID}" > /dev/null
+ok "Nodes added to acme-global-edge"
 
-# ---------------------------------------------------------------------------
-# 8. Create gateway
-# ---------------------------------------------------------------------------
+info "Creating node group: globex-edge..."
+GLOBEX_GROUP_RESP=$(api POST /api/v1/node-groups "{
+  \"tenant_id\": \"$GLOBEX_ID\",
+  \"name\": \"globex-edge\",
+  \"description\": \"Globex Inc shared edge infrastructure\"
+}")
+GLOBEX_GROUP_ID=$(echo "$GLOBEX_GROUP_RESP" | jq_data id)
+ok "Node group created: $GLOBEX_GROUP_ID"
 
-info "Creating gateway: gw-hq..."
-GW_RESP=$(api POST /api/v1/gateways "{
-  \"tenant_id\": \"$TENANT_ID\",
+api POST "/api/v1/node-groups/${GLOBEX_GROUP_ID}/nodes/${NODE1_ID}" > /dev/null
+api POST "/api/v1/node-groups/${GLOBEX_GROUP_ID}/nodes/${NODE2_ID}" > /dev/null
+ok "Nodes added to globex-edge (shared infrastructure)"
+
+# ===========================================================================
+# GATEWAYS
+# ===========================================================================
+
+info "Creating gateway: gw-hq (Acme)..."
+ACME_GW_RESP=$(api POST /api/v1/gateways "{
+  \"tenant_id\": \"$ACME_ID\",
   \"name\": \"gw-hq\",
-  \"public_ip\": \"192.0.2.50\"
+  \"public_ip\": \"172.20.0.50\"
 }")
-GW_ID=$(echo "$GW_RESP" | jq_data id)
-ok "Gateway created: $GW_ID"
+ACME_GW_ID=$(echo "$ACME_GW_RESP" | jq_data id)
+ok "Gateway created: $ACME_GW_ID"
 
-# ---------------------------------------------------------------------------
-# 9. Create DNS zone + records
-# ---------------------------------------------------------------------------
+info "Creating gateway: gw-branch (Globex)..."
+GLOBEX_GW_RESP=$(api POST /api/v1/gateways "{
+  \"tenant_id\": \"$GLOBEX_ID\",
+  \"name\": \"gw-branch\",
+  \"public_ip\": \"192.0.2.60\"
+}")
+GLOBEX_GW_ID=$(echo "$GLOBEX_GW_RESP" | jq_data id)
+ok "Gateway created: $GLOBEX_GW_ID"
 
-info "Creating DNS zone: example.com..."
-ZONE_RESP=$(api POST "/api/v1/tenants/${TENANT_ID}/dns/zones" "{
-  \"name\": \"example.com\",
+# ===========================================================================
+# ENROLLMENT TOKENS
+# ===========================================================================
+
+info "Generating enrollment token for node-1..."
+TOKEN1_RESP=$(api POST "/api/v1/nodes/${NODE1_ID}/enrollment-token")
+TOKEN1=$(echo "$TOKEN1_RESP" | jq -r '.data.token')
+echo "$TOKEN1" > /shared/node-1.token
+ok "Token written to /shared/node-1.token"
+
+info "Generating enrollment token for node-2..."
+TOKEN2_RESP=$(api POST "/api/v1/nodes/${NODE2_ID}/enrollment-token")
+TOKEN2=$(echo "$TOKEN2_RESP" | jq -r '.data.token')
+echo "$TOKEN2" > /shared/node-2.token
+ok "Token written to /shared/node-2.token"
+
+info "Generating enrollment token for VPS..."
+VPS_TOKEN_RESP=$(api POST "/api/v1/nodes/${VPS_ID}/enrollment-token")
+VPS_TOKEN=$(echo "$VPS_TOKEN_RESP" | jq -r '.data.token')
+echo "$VPS_TOKEN" > /shared/vps.token
+ok "Token written to /shared/vps.token"
+
+# ===========================================================================
+# DNS — Acme Corp (acme.example)
+# ===========================================================================
+
+info "Creating DNS zone: acme.example..."
+ACME_ZONE_RESP=$(api POST "/api/v1/tenants/${ACME_ID}/dns/zones" "{
+  \"name\": \"acme.example\",
   \"ttl\": 300,
-  \"node_group_id\": \"$GROUP_ID\"
+  \"node_group_id\": \"$ACME_GROUP_ID\"
 }")
-ZONE_ID=$(echo "$ZONE_RESP" | jq_data id)
-ok "DNS zone created: $ZONE_ID"
+ACME_ZONE_ID=$(echo "$ACME_ZONE_RESP" | jq_data id)
+ok "DNS zone created: $ACME_ZONE_ID"
 
-info "Creating DNS records..."
-api POST "/api/v1/dns/zones/${ZONE_ID}/records" '{
-  "name": "www",
-  "type": "A",
-  "value": "203.0.113.10",
-  "ttl": 300
+info "Creating DNS records for acme.example..."
+api POST "/api/v1/dns/zones/${ACME_ZONE_ID}/records" '{
+  "name": "www", "type": "A", "value": "172.20.0.100", "ttl": 300
 }' > /dev/null
-ok "  A record: www.example.com → 203.0.113.10"
+ok "  A   www.acme.example -> 172.20.0.100"
 
-api POST "/api/v1/dns/zones/${ZONE_ID}/records" '{
-  "name": "@",
-  "type": "MX",
-  "value": "mail.example.com",
-  "priority": 10
+api POST "/api/v1/dns/zones/${ACME_ZONE_ID}/records" '{
+  "name": "@", "type": "A", "value": "172.20.0.10", "ttl": 300
 }' > /dev/null
-ok "  MX record: example.com → mail.example.com (pri 10)"
+ok "  A   acme.example -> 172.20.0.10"
 
-api POST "/api/v1/dns/zones/${ZONE_ID}/records" '{
-  "name": "@",
-  "type": "TXT",
-  "value": "v=spf1 include:_spf.example.com ~all"
+api POST "/api/v1/dns/zones/${ACME_ZONE_ID}/records" '{
+  "name": "cdn", "type": "CNAME", "value": "www.acme.example", "ttl": 300
 }' > /dev/null
-ok "  TXT record: SPF policy"
+ok "  CNAME cdn.acme.example -> www.acme.example"
 
-# ---------------------------------------------------------------------------
-# 10. Create CDN site + origin
-# ---------------------------------------------------------------------------
+api POST "/api/v1/dns/zones/${ACME_ZONE_ID}/records" '{
+  "name": "@", "type": "MX", "value": "mail.acme.example", "priority": 10
+}' > /dev/null
+ok "  MX  acme.example -> mail.acme.example (pri 10)"
 
-info "Creating CDN site: www-cdn..."
-CDN_RESP=$(api POST "/api/v1/tenants/${TENANT_ID}/cdn/sites" "{
+api POST "/api/v1/dns/zones/${ACME_ZONE_ID}/records" '{
+  "name": "@", "type": "TXT", "value": "v=spf1 include:_spf.acme.example ~all"
+}' > /dev/null
+ok "  TXT SPF policy"
+
+# ===========================================================================
+# DNS — Globex Inc (globex.example)
+# ===========================================================================
+
+info "Creating DNS zone: globex.example..."
+GLOBEX_ZONE_RESP=$(api POST "/api/v1/tenants/${GLOBEX_ID}/dns/zones" "{
+  \"name\": \"globex.example\",
+  \"ttl\": 600,
+  \"node_group_id\": \"$GLOBEX_GROUP_ID\"
+}")
+GLOBEX_ZONE_ID=$(echo "$GLOBEX_ZONE_RESP" | jq_data id)
+ok "DNS zone created: $GLOBEX_ZONE_ID"
+
+info "Creating DNS records for globex.example..."
+api POST "/api/v1/dns/zones/${GLOBEX_ZONE_ID}/records" '{
+  "name": "www", "type": "A", "value": "172.20.0.100", "ttl": 600
+}' > /dev/null
+ok "  A   www.globex.example -> 172.20.0.100"
+
+api POST "/api/v1/dns/zones/${GLOBEX_ZONE_ID}/records" '{
+  "name": "api", "type": "A", "value": "172.20.0.100", "ttl": 600
+}' > /dev/null
+ok "  A   api.globex.example -> 172.20.0.100"
+
+api POST "/api/v1/dns/zones/${GLOBEX_ZONE_ID}/records" '{
+  "name": "@", "type": "MX", "value": "mail.globex.example", "priority": 10
+}' > /dev/null
+ok "  MX  globex.example -> mail.globex.example (pri 10)"
+
+api POST "/api/v1/dns/zones/${GLOBEX_ZONE_ID}/records" '{
+  "name": "@", "type": "TXT", "value": "v=spf1 include:_spf.globex.example ~all"
+}' > /dev/null
+ok "  TXT SPF policy"
+
+# ===========================================================================
+# CDN — Acme Corp (www-cdn)
+# ===========================================================================
+
+info "Creating CDN site: www-cdn (Acme)..."
+ACME_CDN_RESP=$(api POST "/api/v1/tenants/${ACME_ID}/cdn/sites" "{
   \"name\": \"www-cdn\",
   \"domains\": [\"www.acme.example\", \"cdn.acme.example\"],
   \"tls_mode\": \"auto\",
   \"cache_enabled\": true,
   \"cache_ttl\": 3600,
   \"compression_enabled\": true,
-  \"node_group_id\": \"$GROUP_ID\"
+  \"node_group_id\": \"$ACME_GROUP_ID\"
 }")
-CDN_ID=$(echo "$CDN_RESP" | jq_data id)
-ok "CDN site created: $CDN_ID"
+ACME_CDN_ID=$(echo "$ACME_CDN_RESP" | jq_data id)
+ok "CDN site created: $ACME_CDN_ID"
 
-info "Adding CDN origin..."
-api POST "/api/v1/cdn/sites/${CDN_ID}/origins" '{
-  "address": "origin.acme.example:443",
-  "scheme": "https",
+info "Adding CDN origin for Acme (origin container)..."
+api POST "/api/v1/cdn/sites/${ACME_CDN_ID}/origins" '{
+  "address": "172.20.0.100:80",
+  "scheme": "http",
   "weight": 100,
   "health_check_path": "/healthz",
   "health_check_interval": 30
 }' > /dev/null
-ok "CDN origin added: origin.acme.example:443"
+ok "CDN origin added: 172.20.0.100:80 (origin container)"
 
-# ---------------------------------------------------------------------------
-# 11. Create route
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# CDN — Globex Inc (api-cdn)
+# ===========================================================================
 
-info "Creating route: ssh-to-hq..."
-ROUTE_RESP=$(api POST "/api/v1/tenants/${TENANT_ID}/routes" "{
+info "Creating CDN site: api-cdn (Globex)..."
+GLOBEX_CDN_RESP=$(api POST "/api/v1/tenants/${GLOBEX_ID}/cdn/sites" "{
+  \"name\": \"api-cdn\",
+  \"domains\": [\"api.globex.example\"],
+  \"tls_mode\": \"auto\",
+  \"cache_enabled\": false,
+  \"compression_enabled\": true,
+  \"node_group_id\": \"$GLOBEX_GROUP_ID\"
+}")
+GLOBEX_CDN_ID=$(echo "$GLOBEX_CDN_RESP" | jq_data id)
+ok "CDN site created: $GLOBEX_CDN_ID"
+
+info "Adding CDN origin for Globex (origin container)..."
+api POST "/api/v1/cdn/sites/${GLOBEX_CDN_ID}/origins" '{
+  "address": "172.20.0.100:80",
+  "scheme": "http",
+  "weight": 100,
+  "health_check_path": "/healthz",
+  "health_check_interval": 30
+}' > /dev/null
+ok "CDN origin added: 172.20.0.100:80 (origin container)"
+
+# ===========================================================================
+# ROUTES
+# ===========================================================================
+
+info "Creating route: ssh-to-hq (Acme)..."
+ACME_ROUTE_RESP=$(api POST "/api/v1/tenants/${ACME_ID}/routes" "{
   \"name\": \"ssh-to-hq\",
   \"protocol\": \"tcp\",
   \"entry_ip\": \"0.0.0.0\",
   \"entry_port\": 2222,
-  \"gateway_id\": \"$GW_ID\",
+  \"gateway_id\": \"$ACME_GW_ID\",
   \"destination_ip\": \"10.0.1.100\",
   \"destination_port\": 22,
-  \"node_group_id\": \"$GROUP_ID\"
+  \"node_group_id\": \"$ACME_GROUP_ID\"
 }")
-ROUTE_ID=$(echo "$ROUTE_RESP" | jq_data id)
-ok "Route created: $ROUTE_ID"
+ACME_ROUTE_ID=$(echo "$ACME_ROUTE_RESP" | jq_data id)
+ok "Route created: $ACME_ROUTE_ID"
 
-# ---------------------------------------------------------------------------
-# 12. Fetch status to verify
-# ---------------------------------------------------------------------------
+info "Creating route: db-access (Globex)..."
+GLOBEX_ROUTE_RESP=$(api POST "/api/v1/tenants/${GLOBEX_ID}/routes" "{
+  \"name\": \"db-access\",
+  \"protocol\": \"tcp\",
+  \"entry_ip\": \"0.0.0.0\",
+  \"entry_port\": 5432,
+  \"gateway_id\": \"$GLOBEX_GW_ID\",
+  \"destination_ip\": \"10.0.2.50\",
+  \"destination_port\": 5432,
+  \"node_group_id\": \"$GLOBEX_GROUP_ID\"
+}")
+GLOBEX_ROUTE_ID=$(echo "$GLOBEX_ROUTE_RESP" | jq_data id)
+ok "Route created: $GLOBEX_ROUTE_ID"
+
+# ===========================================================================
+# BGP SESSIONS
+# ===========================================================================
+
+info "Creating BGP session for node-1..."
+api POST "/api/v1/nodes/${NODE1_ID}/bgp-sessions" '{
+  "peer_asn": 64512,
+  "peer_address": "172.16.0.1",
+  "local_asn": 65001,
+  "announced_prefixes": ["203.0.113.0/24"],
+  "import_policy": "accept-all",
+  "export_policy": "announce-allocated"
+}' > /dev/null
+ok "BGP session: node-1 <-> AS64512 (172.16.0.1)"
+
+info "Creating BGP session for node-2..."
+api POST "/api/v1/nodes/${NODE2_ID}/bgp-sessions" '{
+  "peer_asn": 64513,
+  "peer_address": "172.16.0.2",
+  "local_asn": 65001,
+  "announced_prefixes": ["198.51.100.0/24"],
+  "import_policy": "accept-all",
+  "export_policy": "announce-allocated"
+}' > /dev/null
+ok "BGP session: node-2 <-> AS64513 (172.16.0.2)"
+
+# ===========================================================================
+# IP ALLOCATIONS
+# ===========================================================================
+
+info "Creating IP allocations..."
+api POST "/api/v1/tenants/${ACME_ID}/ip-allocations" '{
+  "prefix": "203.0.113.0/24",
+  "type": "ipv4",
+  "purpose": "anycast"
+}' > /dev/null
+ok "  Acme: 203.0.113.0/24 (anycast)"
+
+api POST "/api/v1/tenants/${GLOBEX_ID}/ip-allocations" '{
+  "prefix": "198.51.100.0/24",
+  "type": "ipv4",
+  "purpose": "anycast"
+}' > /dev/null
+ok "  Globex: 198.51.100.0/24 (anycast)"
+
+# ===========================================================================
+# VERIFY
+# ===========================================================================
 
 info "Fetching status overview..."
 STATUS=$(api GET /api/v1/status)
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# SUMMARY
+# ===========================================================================
 
 printf '\n'
-printf '\033[1;36m╔══════════════════════════════════════════════════════════╗\033[0m\n'
-printf '\033[1;36m║            EdgeFabric Demo Environment Ready            ║\033[0m\n'
-printf '\033[1;36m╚══════════════════════════════════════════════════════════╝\033[0m\n'
+printf '\033[1;36m╔══════════════════════════════════════════════════════════════════╗\033[0m\n'
+printf '\033[1;36m║         EdgeFabric Comprehensive Demo — Ready!                  ║\033[0m\n'
+printf '\033[1;36m╚══════════════════════════════════════════════════════════════════╝\033[0m\n'
 printf '\n'
-printf '\033[1mController:\033[0m  %s\n' "$CONTROLLER_URL"
-printf '\033[1mAdmin email:\033[0m admin@edgefabric.local\n'
-printf '\033[1mAdmin pass:\033[0m  %s\n' "$ADMIN_PASSWORD"
+printf '\033[1m── Credentials ─────────────────────────────────────────────────────\033[0m\n'
+printf '  \033[1mSuperuser:\033[0m   admin@edgefabric.local / %s\n' "$ADMIN_PASSWORD"
+printf '  \033[1mAcme user:\033[0m   ops@acme.example / demo-password-123\n'
+printf '  \033[1mGlobex user:\033[0m admin@globex.example / demo-password-456\n'
+printf '  \033[1mVPS SSH:\033[0m     ssh root@localhost -p 2222 (password: demo)\n'
 printf '\n'
-printf '\033[1mResources created:\033[0m\n'
-printf '  Tenant:     Acme Corp (%s)\n' "$TENANT_ID"
-printf '  User:       ops@acme.example (%s)\n' "$USER_ID"
-printf '  Nodes:      edge-us-east-1, edge-eu-west-1\n'
-printf '  Group:      global-edge (2 nodes)\n'
-printf '  Gateway:    gw-hq (%s)\n' "$GW_ID"
-printf '  DNS Zone:   example.com (3 records)\n'
-printf '  CDN Site:   www-cdn (1 origin)\n'
-printf '  Route:      ssh-to-hq (tcp/2222 → 10.0.1.100:22)\n'
+printf '\033[1m── Services ────────────────────────────────────────────────────────\033[0m\n'
+printf '  Controller + SPA:  http://localhost:8443\n'
+printf '  CDN (node-1):      curl -H "Host: www.acme.example" http://localhost:8081\n'
+printf '  CDN (node-2):      curl -H "Host: www.acme.example" http://localhost:8082\n'
+printf '  DNS (node-1):      dig @localhost -p 5354 www.acme.example A\n'
+printf '  DNS (node-2):      dig @localhost -p 5355 www.acme.example A\n'
+printf '  Origin (direct):   http://localhost:8888\n'
+printf '  Gateway health:    http://localhost:9190/healthz\n'
 printf '\n'
-printf '\033[1mStatus:\033[0m\n'
+printf '\033[1m── Resources Created ───────────────────────────────────────────────\033[0m\n'
+printf '  Tenants:    Acme Corp, Globex Inc\n'
+printf '  Nodes:      edge-us-east-1, edge-eu-west-1, vps-staging\n'
+printf '  Groups:     acme-global-edge (2 nodes), globex-edge (2 nodes)\n'
+printf '  Gateways:   gw-hq (Acme), gw-branch (Globex)\n'
+printf '  DNS Zones:  acme.example (5 records), globex.example (4 records)\n'
+printf '  CDN Sites:  www-cdn (Acme, cached), api-cdn (Globex, pass-through)\n'
+printf '  Routes:     ssh-to-hq (tcp/2222), db-access (tcp/5432)\n'
+printf '  BGP:        node-1 <-> AS64512, node-2 <-> AS64513\n'
+printf '  IPs:        203.0.113.0/24 (Acme), 198.51.100.0/24 (Globex)\n'
+printf '\n'
+printf '\033[1m── Status ──────────────────────────────────────────────────────────\033[0m\n'
 printf '  Nodes:    %s\n' "$(echo "$STATUS" | jq -r '.data.node_count')"
 printf '  Gateways: %s\n' "$(echo "$STATUS" | jq -r '.data.gateway_count')"
 printf '  Routes:   %s\n' "$(echo "$STATUS" | jq -r '.data.route_count')"
 printf '  DNS:      %s zones\n' "$(echo "$STATUS" | jq -r '.data.dns_zone_count')"
 printf '  CDN:      %s sites\n' "$(echo "$STATUS" | jq -r '.data.cdn_site_count')"
 printf '\n'
-printf '\033[1mTry it:\033[0m\n'
-printf '  # Health check\n'
-printf '  curl http://localhost:8443/healthz\n'
+printf '\033[1m── Demo Commands ───────────────────────────────────────────────────\033[0m\n'
+printf '  # CDN caching (first request = MISS, second = HIT)\n'
+printf '  curl -v -H "Host: www.acme.example" http://localhost:8081\n'
 printf '\n'
-printf '  # Login\n'
-printf '  curl -s -X POST http://localhost:8443/api/v1/auth/login \\\n'
-printf '    -H "Content-Type: application/json" \\\n'
-printf '    -d '\''{"email":"admin@edgefabric.local","password":"%s"}'\'' | jq\n' "$ADMIN_PASSWORD"
+printf '  # DNS lookup\n'
+printf '  dig @localhost -p 5354 www.acme.example A\n'
 printf '\n'
-printf '  # List nodes (use token from login response)\n'
-printf '  curl -s http://localhost:8443/api/v1/nodes \\\n'
-printf '    -H "Authorization: Bearer <token>" | jq\n'
+printf '  # VPS enrollment\n'
+printf '  ssh root@localhost -p 2222\n'
+printf '  cat /shared/vps.token\n'
+printf '  edgefabric node enroll --controller http://172.20.0.2:8443 --token $(cat /shared/vps.token)\n'
+printf '\n'
+printf '  # Web console\n'
+printf '  open http://localhost:8443\n'
 printf '\n'

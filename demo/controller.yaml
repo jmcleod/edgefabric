@@ -10,6 +10,9 @@ controller:
   listen_addr: ":8443"
   external_url: "http://localhost:8443"
 
+  tls:
+    enabled: false
+
   storage:
     driver: sqlite
     dsn: "/var/lib/edgefabric/demo.db"

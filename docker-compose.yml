@@ -1,15 +1,26 @@
-# EdgeFabric Demo — Docker Compose
+# EdgeFabric Comprehensive Demo — Docker Compose
 #
-# Starts the controller and seeds it with sample data.
+# Starts the full platform: controller, 2 edge nodes (with real CDN + DNS),
+# a gateway, an origin server, and a VPS for enrollment demos.
 #
 # Usage:
-#   docker compose up --build        # Build and start
-#   docker compose down -v           # Stop and remove volumes
+#   docker compose up --build        # Build and start everything
+#   docker compose down -v           # Stop and remove all data
 #
-# The controller API is available at http://localhost:8443
-# after the demo-setup container prints the summary.
+# After startup (~45s), the following services are available:
+#   Controller + SPA:  http://localhost:8443
+#   CDN (node-1):      http://localhost:8081  (use Host: www.acme.example)
+#   CDN (node-2):      http://localhost:8082  (use Host: www.acme.example)
+#   DNS (node-1):      dig @localhost -p 5354 www.acme.example A
+#   DNS (node-2):      dig @localhost -p 5355 www.acme.example A
+#   Origin (direct):   http://localhost:8888
+#   VPS (SSH):         ssh root@localhost -p 2222 (password: demo)
+#   Gateway health:    http://localhost:9190/healthz
 
 services:
+  # ──────────────────────────────────────────────────────────────────
+  # Controller — API server, web console, database
+  # ──────────────────────────────────────────────────────────────────
   controller:
     build:
       context: .
@@ -29,19 +40,141 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+    networks:
+      ef-mesh:
+        ipv4_address: 172.20.0.2
 
+  # ──────────────────────────────────────────────────────────────────
+  # Demo Setup — seeds data via API, generates enrollment tokens
+  # ──────────────────────────────────────────────────────────────────
   demo-setup:
     image: alpine:3.21
     depends_on:
       controller:
         condition: service_healthy
     volumes:
-      - ef-shared:/shared:ro
+      - ef-shared:/shared
       - ./demo/setup.sh:/demo/setup.sh:ro
     environment:
-      CONTROLLER_URL: "http://controller:8443"
+      CONTROLLER_URL: "http://172.20.0.2:8443"
     command: ["/bin/sh", "-c", "apk add --no-cache curl jq > /dev/null 2>&1 && /bin/sh /demo/setup.sh"]
+    networks:
+      ef-mesh:
+
+  # ──────────────────────────────────────────────────────────────────
+  # Node 1 — edge-us-east-1 (CDN proxy, DNS server, BGP noop, Route noop)
+  # ──────────────────────────────────────────────────────────────────
+  node-1:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    entrypoint: ["/bin/sh", "/demo/node-entrypoint.sh"]
+    command: []
+    ports:
+      - "8081:8080"              # CDN proxy
+      - "5354:5353/tcp"          # DNS (TCP)
+      - "5354:5353/udp"          # DNS (UDP)
+    volumes:
+      - ef-shared:/shared:ro
+      - node1-data:/var/lib/edgefabric
+      - ./demo/node.yaml:/etc/edgefabric/edgefabric.yaml:ro
+      - ./demo/node-entrypoint.sh:/demo/node-entrypoint.sh:ro
+    environment:
+      NODE_NAME: "node-1"
+    depends_on:
+      demo-setup:
+        condition: service_completed_successfully
+    networks:
+      ef-mesh:
+        ipv4_address: 172.20.0.10
+
+  # ──────────────────────────────────────────────────────────────────
+  # Node 2 — edge-eu-west-1 (CDN proxy, DNS server, BGP noop, Route noop)
+  # ──────────────────────────────────────────────────────────────────
+  node-2:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    entrypoint: ["/bin/sh", "/demo/node-entrypoint.sh"]
+    command: []
+    ports:
+      - "8082:8080"              # CDN proxy
+      - "5355:5353/tcp"          # DNS (TCP)
+      - "5355:5353/udp"          # DNS (UDP)
+    volumes:
+      - ef-shared:/shared:ro
+      - node2-data:/var/lib/edgefabric
+      - ./demo/node.yaml:/etc/edgefabric/edgefabric.yaml:ro
+      - ./demo/node-entrypoint.sh:/demo/node-entrypoint.sh:ro
+    environment:
+      NODE_NAME: "node-2"
+    depends_on:
+      demo-setup:
+        condition: service_completed_successfully
+    networks:
+      ef-mesh:
+        ipv4_address: 172.20.0.11
+
+  # ──────────────────────────────────────────────────────────────────
+  # Gateway — route forwarding (noop mode in demo)
+  # ──────────────────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    entrypoint: ["/bin/sh", "/demo/gateway-entrypoint.sh"]
+    command: []
+    ports:
+      - "9190:9090"              # Health/metrics
+    volumes:
+      - gw-data:/var/lib/edgefabric
+      - ./demo/gateway.yaml:/etc/edgefabric/edgefabric.yaml:ro
+      - ./demo/gateway-entrypoint.sh:/demo/gateway-entrypoint.sh:ro
+    depends_on:
+      controller:
+        condition: service_healthy
+    networks:
+      ef-mesh:
+        ipv4_address: 172.20.0.50
+
+  # ──────────────────────────────────────────────────────────────────
+  # Origin — test HTTP server (Nginx) serving a demo page
+  # ──────────────────────────────────────────────────────────────────
+  origin:
+    build:
+      context: demo/origin
+      dockerfile: Dockerfile
+    ports:
+      - "8888:80"
+    networks:
+      ef-mesh:
+        ipv4_address: 172.20.0.100
+
+  # ──────────────────────────────────────────────────────────────────
+  # VPS — Alpine with SSH for enrollment demo
+  # ──────────────────────────────────────────────────────────────────
+  vps:
+    build:
+      context: .
+      dockerfile: demo/vps/Dockerfile
+    ports:
+      - "2222:22"
+    volumes:
+      - ef-shared:/shared:ro
+    networks:
+      ef-mesh:
+        ipv4_address: 172.20.0.12
+
+networks:
+  ef-mesh:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
 
 volumes:
   ef-data:
   ef-shared:
+  node1-data:
+  node2-data:
+  gw-data:

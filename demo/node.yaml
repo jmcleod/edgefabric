@@ -1,0 +1,37 @@
+# EdgeFabric Node — Docker Demo Configuration
+#
+# Used by node-1 and node-2 containers. The enrollment_token is injected
+# at runtime via the EF_NODE_ENROLLMENT_TOKEN environment variable.
+
+role: node
+log_level: info
+
+node:
+  # Controller address on the Docker bridge network (no TLS in demo).
+  controller_addr: "http://172.20.0.2:8443"
+
+  data_dir: /var/lib/edgefabric
+  health_addr: ":9090"
+
+  # --- Services ---
+  # CDN: real reverse proxy — works without WireGuard.
+  cdn:
+    enabled: true
+    mode: "proxy"
+    listen_addr: ":8080"
+
+  # DNS: real authoritative DNS — works without WireGuard.
+  dns:
+    enabled: true
+    mode: "miekg"
+    listen_addr: ":5353"
+
+  # BGP: noop — GoBGP needs kernel routing tables.
+  bgp:
+    enabled: true
+    mode: "noop"
+
+  # Route: noop — forwarder needs WireGuard overlay.
+  route:
+    enabled: true
+    mode: "noop"
