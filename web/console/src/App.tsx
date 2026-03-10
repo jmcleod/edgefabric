@@ -28,6 +28,10 @@ import ProvisioningJobsPage from "./pages/ProvisioningJobsPage";
 import SSHKeysPage from "./pages/SSHKeysPage";
 import APIKeysPage from "./pages/APIKeysPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import ProfilePage from "./pages/ProfilePage";
+import FleetHealthPage from "./pages/FleetHealthPage";
+import SettingsPage from "./pages/SettingsPage";
+import { CommandPalette } from "./components/CommandPalette";
 import TenantDashboardPage from "./pages/tenant/TenantDashboardPage";
 import TenantNodesPage from "./pages/tenant/TenantNodesPage";
 import TenantNodeGroupsPage from "./pages/tenant/TenantNodeGroupsPage";
@@ -75,6 +79,9 @@ const App = () => (
               <Route path="/jobs" element={<RequireAuth><ProvisioningJobsPage /></RequireAuth>} />
               <Route path="/ssh-keys" element={<RequireAuth><SSHKeysPage /></RequireAuth>} />
               <Route path="/audit" element={<RequireAuth><AuditLogsPage /></RequireAuth>} />
+              <Route path="/fleet-health" element={<RequireAuth><FleetHealthPage /></RequireAuth>} />
+              <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
+              <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
 
               {/* Tenant-scoped routes */}
               <Route path="/tenant/dashboard" element={<RequireAuth><TenantDashboardPage /></RequireAuth>} />
@@ -93,12 +100,9 @@ const App = () => (
               <Route path="/tenant/api-keys" element={<RequireAuth><APIKeysPage /></RequireAuth>} />
               <Route path="/tenant/audit" element={<RequireAuth><TenantAuditPage /></RequireAuth>} />
 
-              {/* Placeholder routes — will be replaced in later phases */}
-              <Route path="/fleet-health" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
-              <Route path="/settings" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
-
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <CommandPalette />
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
