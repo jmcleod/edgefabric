@@ -1,4 +1,4 @@
-// EdgeFabric Mock Data Types
+// EdgeFabric View-Model Types
 
 export type UserRole = 'superuser' | 'admin' | 'readonly';
 
@@ -10,6 +10,8 @@ export interface User {
   name: string;
   role: UserRole;
   tenantId?: string;
+  totpEnabled: boolean;
+  status: 'active' | 'disabled';
   createdAt: string;
   lastLogin?: string;
 }
@@ -188,6 +190,26 @@ export interface APIKey {
   createdAt: string;
   lastUsed?: string;
   expiresAt?: string;
+}
+
+export interface SSHKey {
+  id: string;
+  name: string;
+  publicKey: string;
+  fingerprint: string;
+  createdAt: string;
+  lastRotatedAt: string;
+}
+
+export interface IPAllocation {
+  id: string;
+  tenantId: string;
+  prefix: string;
+  type: 'anycast' | 'unicast';
+  purpose: 'dns' | 'cdn' | 'route';
+  status: 'active' | 'withdrawn' | 'pending';
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SystemSettings {

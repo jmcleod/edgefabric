@@ -218,6 +218,26 @@ export interface ApiAPIKey {
   created_at: string;
 }
 
+export interface ApiSSHKey {
+  id: string;
+  name: string;
+  public_key: string;
+  fingerprint: string;
+  created_at: string;
+  last_rotated_at: string;
+}
+
+export interface ApiIPAllocation {
+  id: string;
+  tenant_id: string;
+  prefix: string;
+  type: 'anycast' | 'unicast';
+  purpose: 'dns' | 'cdn' | 'route';
+  status: 'active' | 'withdrawn' | 'pending';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiStatusResponse {
   version: string;
   commit: string;

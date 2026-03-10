@@ -4,12 +4,12 @@
 import type {
   Node, Gateway, Tenant, DNSZone, DNSRecord, CDNService, CDNOrigin, Route,
   AuditLogEntry, APIKey, BGPPeer, WireGuardPeer, ProvisioningJob, NodeGroup,
-  HealthStatus, GlobalStats, User,
+  HealthStatus, GlobalStats, User, SSHKey, IPAllocation,
 } from '@/types';
 import type {
   ApiNode, ApiGateway, ApiTenant, ApiDNSZone, ApiDNSRecord, ApiCDNSite, ApiCDNOrigin,
   ApiRoute, ApiAuditEvent, ApiAPIKey, ApiBGPSession, ApiWireGuardPeer, ApiProvisioningJob,
-  ApiNodeGroup, ApiStatusResponse, ApiUser,
+  ApiNodeGroup, ApiStatusResponse, ApiUser, ApiSSHKey, ApiIPAllocation,
 } from '@/types/api';
 
 // --- Status Mapping ---
@@ -48,6 +48,8 @@ export function transformUser(api: ApiUser): User {
     name: api.name,
     role: api.role,
     tenantId: api.tenant_id,
+    totpEnabled: api.totp_enabled,
+    status: api.status,
     createdAt: api.created_at,
     lastLogin: api.last_login_at,
   };
@@ -275,6 +277,30 @@ export function transformProvisioningJob(api: ApiProvisioningJob): ProvisioningJ
     startedAt: api.started_at,
     completedAt: api.completed_at,
     logs: api.steps?.map(s => `[${s.step}] ${s.status}${s.error ? ': ' + s.error : ''}`) || [],
+  };
+}
+
+export function transformSSHKey(api: ApiSSHKey): SSHKey {
+  return {
+    id: api.id,
+    name: api.name,
+    publicKey: api.public_key,
+    fingerprint: api.fingerprint,
+    createdAt: api.created_at,
+    lastRotatedAt: api.last_rotated_at,
+  };
+}
+
+export function transformIPAllocation(api: ApiIPAllocation): IPAllocation {
+  return {
+    id: api.id,
+    tenantId: api.tenant_id,
+    prefix: api.prefix,
+    type: api.type,
+    purpose: api.purpose,
+    status: api.status,
+    createdAt: api.created_at,
+    updatedAt: api.updated_at,
   };
 }
 
