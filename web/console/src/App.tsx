@@ -19,7 +19,11 @@ import WireGuardPage from "./pages/WireGuardPage";
 import BGPPage from "./pages/BGPPage";
 import IPAllocationsPage from "./pages/IPAllocationsPage";
 import DNSZonesPage from "./pages/DNSZonesPage";
+import DNSZoneDetailPage from "./pages/DNSZoneDetailPage";
 import CDNServicesPage from "./pages/CDNServicesPage";
+import CDNSiteDetailPage from "./pages/CDNSiteDetailPage";
+import RoutesPage from "./pages/RoutesPage";
+import RouteDetailPage from "./pages/RouteDetailPage";
 import ProvisioningJobsPage from "./pages/ProvisioningJobsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import NotFound from "./pages/NotFound";
@@ -63,7 +67,11 @@ const App = () => (
 
               {/* Tenant-scoped routes */}
               <Route path="/tenant/dns/zones" element={<RequireAuth><DNSZonesPage /></RequireAuth>} />
+              <Route path="/tenant/dns/zones/:id" element={<RequireAuth><DNSZoneDetailPage /></RequireAuth>} />
               <Route path="/tenant/cdn/services" element={<RequireAuth><CDNServicesPage /></RequireAuth>} />
+              <Route path="/tenant/cdn/services/:id" element={<RequireAuth><CDNSiteDetailPage /></RequireAuth>} />
+              <Route path="/tenant/routes" element={<RequireAuth><RoutesPage /></RequireAuth>} />
+              <Route path="/tenant/routes/:id" element={<RequireAuth><RouteDetailPage /></RequireAuth>} />
 
               {/* Placeholder routes — will be replaced in later phases */}
               <Route path="/fleet-health" element={<RequireAuth><GlobalDashboard /></RequireAuth>} />
