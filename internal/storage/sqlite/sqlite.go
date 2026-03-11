@@ -587,4 +587,9 @@ var migrations = []Migration{
 		Description: "add waf_mode to cdn_sites",
 		SQL:         `ALTER TABLE cdn_sites ADD COLUMN waf_mode TEXT NOT NULL DEFAULT 'detect'`,
 	},
+
+	{
+		Description: "add transfer_allowed_ips to dns_zones",
+		SQL:         `ALTER TABLE dns_zones ADD COLUMN transfer_allowed_ips TEXT NOT NULL DEFAULT '[]'`,
+	},
 }

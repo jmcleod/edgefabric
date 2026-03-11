@@ -37,6 +37,10 @@ type ForwarderService struct {
 	running bool
 	routes  map[domain.ID]*routeRuntime
 
+	// ICMP proxy — lazy-initialized on first ICMP route.
+	icmpProxy *icmpProxy
+	icmpOnce  sync.Once
+
 	// Counters.
 	connectionsOpen atomic.Uint64
 	bytesForwarded  atomic.Uint64
@@ -75,6 +79,12 @@ func (s *ForwarderService) Stop(_ context.Context) error {
 	for id, rt := range s.routes {
 		s.stopRouteLocked(rt)
 		delete(s.routes, id)
+	}
+
+	// Close ICMP proxy if initialized.
+	if s.icmpProxy != nil {
+		s.icmpProxy.close()
+		s.icmpProxy = nil
 	}
 
 	s.running = false
@@ -157,11 +167,17 @@ func (s *ForwarderService) GetStatus(_ context.Context) (*ServerStatus, error) {
 		}
 	}
 
+	var icmpRoutes int
+	if s.icmpProxy != nil {
+		icmpRoutes = s.icmpProxy.routeCount()
+	}
+
 	return &ServerStatus{
 		Running:         s.running,
 		ActiveRoutes:    len(s.routes),
 		TCPListeners:    tcpListeners,
 		UDPListeners:    udpListeners,
+		ICMPRoutes:      icmpRoutes,
 		ConnectionsOpen: s.connectionsOpen.Load(),
 		BytesForwarded:  s.bytesForwarded.Load(),
 	}, nil
@@ -242,13 +258,15 @@ func (s *ForwarderService) startRoute(rwg route.RouteWithGateway) (*routeRuntime
 			return nil, err
 		}
 	case domain.RouteProtocolICMP:
-		// ICMP requires raw sockets — deferred to v2.
-		s.logger.Warn("ICMP route forwarding not yet supported, skipping",
-			slog.String("route_id", r.ID.String()),
-			slog.String("route_name", r.Name),
-		)
-		cancel()
-		return nil, fmt.Errorf("icmp forwarding not supported in v1")
+		if err := s.startICMPRoute(r, rwg.GatewayWGIP); err != nil {
+			s.logger.Warn("ICMP route failed to start, skipping",
+				slog.String("route_id", r.ID.String()),
+				slog.String("route_name", r.Name),
+				slog.String("error", err.Error()),
+			)
+			cancel()
+			return nil, err
+		}
 	default:
 		cancel()
 		return nil, fmt.Errorf("unsupported protocol: %s", protocol)
@@ -263,6 +281,24 @@ func (s *ForwarderService) startRoute(rwg route.RouteWithGateway) (*routeRuntime
 	)
 
 	return rt, nil
+}
+
+// startICMPRoute lazy-initializes the shared ICMP proxy and registers
+// the route. Returns an error if the raw socket cannot be opened.
+func (s *ForwarderService) startICMPRoute(r *domain.Route, gatewayWGIP string) error {
+	var initErr error
+	s.icmpOnce.Do(func() {
+		s.icmpProxy, initErr = newICMPProxy(s.logger, nil)
+	})
+	if initErr != nil {
+		return fmt.Errorf("init ICMP proxy: %w", initErr)
+	}
+	if s.icmpProxy == nil {
+		return fmt.Errorf("ICMP proxy unavailable")
+	}
+
+	s.icmpProxy.addRoute(r.EntryIP, r.ID.String(), gatewayWGIP, r.DestinationIP)
+	return nil
 }
 
 // startTCPListener binds a TCP listener on EntryIP:EntryPort and starts

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -24,11 +25,17 @@ func (s *PostgresStore) CreateDNSZone(ctx context.Context, z *domain.DNSZone) er
 		z.Status = domain.DNSZoneActive
 	}
 
+	transferIPs := "[]"
+	if len(z.TransferAllowedIPs) > 0 {
+		b, _ := json.Marshal(z.TransferAllowedIPs)
+		transferIPs = string(b)
+	}
+
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO dns_zones (id, tenant_id, name, status, serial, ttl, node_group_id, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		`INSERT INTO dns_zones (id, tenant_id, name, status, serial, ttl, node_group_id, transfer_allowed_ips, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		z.ID.String(), z.TenantID.String(), z.Name,
-		string(z.Status), z.Serial, z.TTL, nullIDString(z.NodeGroupID),
+		string(z.Status), z.Serial, z.TTL, nullIDString(z.NodeGroupID), transferIPs,
 		z.CreatedAt, z.UpdatedAt,
 	)
 	if err != nil {
@@ -43,12 +50,13 @@ func (s *PostgresStore) CreateDNSZone(ctx context.Context, z *domain.DNSZone) er
 func (s *PostgresStore) GetDNSZone(ctx context.Context, id domain.ID) (*domain.DNSZone, error) {
 	z := &domain.DNSZone{}
 	var nodeGroupID sql.NullString
+	var transferIPs string
 
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, tenant_id, name, status, serial, ttl, node_group_id, created_at, updated_at
+		`SELECT id, tenant_id, name, status, serial, ttl, node_group_id, transfer_allowed_ips, created_at, updated_at
 		 FROM dns_zones WHERE id = $1`, id.String(),
 	).Scan(&z.ID, &z.TenantID, &z.Name, &z.Status, &z.Serial,
-		&z.TTL, &nodeGroupID, &z.CreatedAt, &z.UpdatedAt)
+		&z.TTL, &nodeGroupID, &transferIPs, &z.CreatedAt, &z.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
@@ -62,6 +70,10 @@ func (s *PostgresStore) GetDNSZone(ctx context.Context, id domain.ID) (*domain.D
 			return nil, fmt.Errorf("parse node_group_id: %w", err)
 		}
 		z.NodeGroupID = &parsed
+	}
+
+	if transferIPs != "" {
+		_ = json.Unmarshal([]byte(transferIPs), &z.TransferAllowedIPs)
 	}
 
 	return z, nil
@@ -81,7 +93,7 @@ func (s *PostgresStore) ListDNSZones(ctx context.Context, tenantID domain.ID, pa
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, tenant_id, name, status, serial, ttl, node_group_id, created_at, updated_at
+		`SELECT id, tenant_id, name, status, serial, ttl, node_group_id, transfer_allowed_ips, created_at, updated_at
 		 FROM dns_zones WHERE tenant_id = $1 ORDER BY name ASC LIMIT $2 OFFSET $3`,
 		tenantID.String(), params.Limit, params.Offset,
 	)
@@ -94,8 +106,9 @@ func (s *PostgresStore) ListDNSZones(ctx context.Context, tenantID domain.ID, pa
 	for rows.Next() {
 		z := &domain.DNSZone{}
 		var nodeGroupID sql.NullString
+		var transferIPs string
 		if err := rows.Scan(&z.ID, &z.TenantID, &z.Name, &z.Status, &z.Serial,
-			&z.TTL, &nodeGroupID, &z.CreatedAt, &z.UpdatedAt); err != nil {
+			&z.TTL, &nodeGroupID, &transferIPs, &z.CreatedAt, &z.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan dns zone: %w", err)
 		}
 		if nodeGroupID.Valid {
@@ -105,6 +118,9 @@ func (s *PostgresStore) ListDNSZones(ctx context.Context, tenantID domain.ID, pa
 			}
 			z.NodeGroupID = &parsed
 		}
+		if transferIPs != "" {
+			_ = json.Unmarshal([]byte(transferIPs), &z.TransferAllowedIPs)
+		}
 		zones = append(zones, z)
 	}
 	return zones, total, rows.Err()
@@ -113,10 +129,16 @@ func (s *PostgresStore) ListDNSZones(ctx context.Context, tenantID domain.ID, pa
 func (s *PostgresStore) UpdateDNSZone(ctx context.Context, z *domain.DNSZone) error {
 	z.UpdatedAt = time.Now().UTC()
 
+	transferIPs := "[]"
+	if len(z.TransferAllowedIPs) > 0 {
+		b, _ := json.Marshal(z.TransferAllowedIPs)
+		transferIPs = string(b)
+	}
+
 	result, err := s.db.ExecContext(ctx,
-		`UPDATE dns_zones SET name = $1, status = $2, ttl = $3, node_group_id = $4, updated_at = $5
-		 WHERE id = $6`,
-		z.Name, string(z.Status), z.TTL, nullIDString(z.NodeGroupID),
+		`UPDATE dns_zones SET name = $1, status = $2, ttl = $3, node_group_id = $4, transfer_allowed_ips = $5, updated_at = $6
+		 WHERE id = $7`,
+		z.Name, string(z.Status), z.TTL, nullIDString(z.NodeGroupID), transferIPs,
 		z.UpdatedAt, z.ID.String(),
 	)
 	if err != nil {

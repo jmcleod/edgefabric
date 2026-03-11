@@ -187,6 +187,31 @@ export default function DNSZoneDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Zone Transfer Card */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Zone Transfer (AXFR)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Allowed Transfer IPs</p>
+              {zone.transferAllowedIPs.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {zone.transferAllowedIPs.map((ip) => (
+                    <span key={ip} className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium mono-data">
+                      {ip}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">None &mdash; transfers disabled</p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Records Table */}
       <PageHeader
         title="DNS Records"

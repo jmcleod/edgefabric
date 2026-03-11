@@ -9,7 +9,8 @@ import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useRoute, useUpdateRoute, useDeleteRoute } from '@/hooks/useRoutes';
 import { routeSchema, type RouteFormData } from '@/lib/schemas';
-import { ArrowRightLeft, ArrowLeft, Pencil, Trash2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ArrowRightLeft, ArrowLeft, Pencil, Trash2, Info } from 'lucide-react';
 
 const routeFields: FieldConfig<RouteFormData>[] = [
   { name: 'name', label: 'Name', placeholder: 'web-proxy-route' },
@@ -103,6 +104,15 @@ export default function RouteDetailPage() {
         </div>
       </div>
 
+      {route.protocol === 'icmp' && (
+        <Alert className="mb-4">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            ICMP forwarding requires <code className="mono-data text-xs">CAP_NET_RAW</code> on both nodes and gateways. Port fields are not applicable for ICMP routes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -111,6 +121,7 @@ export default function RouteDetailPage() {
           <CardContent className="space-y-3">
             <InfoRow label="ID" value={route.id} mono />
             <InfoRow label="Name" value={route.name} />
+            <InfoRow label="Protocol" value={route.protocol.toUpperCase()} />
             <InfoRow label="Entry IP" value={route.exposedIp} mono />
             <InfoRow label="Destination" value={route.privateDestination} mono />
             <InfoRow label="Gateway ID" value={route.gatewayId} mono />

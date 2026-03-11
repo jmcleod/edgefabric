@@ -38,12 +38,17 @@ func (s *DefaultService) CreateZone(ctx context.Context, req CreateZoneRequest) 
 		return nil, fmt.Errorf("invalid zone: %w", err)
 	}
 
+	if err := validateTransferAllowedIPs(req.TransferAllowedIPs); err != nil {
+		return nil, fmt.Errorf("invalid zone: %w", err)
+	}
+
 	zone := &domain.DNSZone{
-		ID:          domain.NewID(),
-		TenantID:    req.TenantID,
-		Name:        req.Name,
-		TTL:         req.TTL,
-		NodeGroupID: req.NodeGroupID,
+		ID:                 domain.NewID(),
+		TenantID:           req.TenantID,
+		Name:               req.Name,
+		TTL:                req.TTL,
+		NodeGroupID:        req.NodeGroupID,
+		TransferAllowedIPs: req.TransferAllowedIPs,
 	}
 
 	if err := s.zones.CreateDNSZone(ctx, zone); err != nil {
@@ -82,6 +87,12 @@ func (s *DefaultService) UpdateZone(ctx context.Context, id domain.ID, req Updat
 		zone.NodeGroupID = nil
 	} else if req.NodeGroupID != nil {
 		zone.NodeGroupID = req.NodeGroupID
+	}
+	if req.TransferAllowedIPs != nil {
+		if err := validateTransferAllowedIPs(*req.TransferAllowedIPs); err != nil {
+			return nil, fmt.Errorf("invalid transfer allowed IPs: %w", err)
+		}
+		zone.TransferAllowedIPs = *req.TransferAllowedIPs
 	}
 
 	if err := s.zones.UpdateDNSZone(ctx, zone); err != nil {

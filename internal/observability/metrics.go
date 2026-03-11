@@ -62,6 +62,13 @@ type Metrics struct {
 
 	// HA leader election (controller-side, Milestone 13.1)
 	LeaderStatus prometheus.Gauge
+
+	// AXFR metrics (node-side, Milestone 14.1)
+	AXFRTransfersTotal     *prometheus.CounterVec // labels: {zone, result} result=success|denied
+	AXFRRecordsTransferred prometheus.Counter
+
+	// ICMP metrics (node + gateway, Milestone 14.2)
+	ICMPPacketsForwarded *prometheus.CounterVec // labels: {direction} direction=request|reply
 }
 
 // NewMetrics creates and registers all Prometheus metrics.
@@ -264,6 +271,31 @@ func NewMetrics() *Metrics {
 			Name:      "leader_status",
 			Help:      "Whether this controller instance is the leader (1=leader, 0=follower).",
 		}),
+
+		// AXFR metrics.
+		AXFRTransfersTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "axfr_transfers_total",
+				Help:      "Total AXFR zone transfer attempts by zone and result.",
+			},
+			[]string{"zone", "result"},
+		),
+		AXFRRecordsTransferred: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "edgefabric",
+			Name:      "axfr_records_transferred_total",
+			Help:      "Total DNS records transferred via AXFR.",
+		}),
+
+		// ICMP metrics.
+		ICMPPacketsForwarded: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "icmp_packets_forwarded_total",
+				Help:      "Total ICMP packets forwarded by direction.",
+			},
+			[]string{"direction"},
+		),
 	}
 
 	reg.MustRegister(
@@ -293,6 +325,9 @@ func NewMetrics() *Metrics {
 		m.WAFMatchesTotal,
 		m.WAFRequestsInspected,
 		m.LeaderStatus,
+		m.AXFRTransfersTotal,
+		m.AXFRRecordsTransferred,
+		m.ICMPPacketsForwarded,
 	)
 
 	return m

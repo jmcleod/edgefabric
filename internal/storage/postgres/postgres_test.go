@@ -49,10 +49,11 @@ func TestMigrations_Valid(t *testing.T) {
 func TestMigrations_Count(t *testing.T) {
 	// Ensure the PostgreSQL migration count matches SQLite (minus the 2 ALTER TABLE
 	// migrations that are folded into the initial CREATE TABLE in PostgreSQL).
-	// SQLite has 32 migrations; PostgreSQL has 30 (no separate ALTER TABLE for
+	// SQLite has 34 migrations; PostgreSQL has 33 (no separate ALTER TABLE for
 	// last_config_sync on nodes and gateways since the column is in the CREATE TABLE).
-	if len(migrations) != 32 {
-		t.Errorf("expected 32 PostgreSQL migrations, got %d", len(migrations))
+	// Migration 35 (index 32) adds transfer_allowed_ips for AXFR (Milestone 14).
+	if len(migrations) != 33 {
+		t.Errorf("expected 33 PostgreSQL migrations, got %d", len(migrations))
 	}
 }
 

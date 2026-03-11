@@ -27,15 +27,16 @@ const (
 
 // DNSZone is an authoritative DNS zone managed by a tenant.
 type DNSZone struct {
-	ID          ID            `json:"id" db:"id"`
-	TenantID    ID            `json:"tenant_id" db:"tenant_id"`
-	Name        string        `json:"name" db:"name"`
-	Status      DNSZoneStatus `json:"status" db:"status"`
-	Serial      uint32        `json:"serial" db:"serial"`
-	TTL         int           `json:"ttl" db:"ttl"`
-	NodeGroupID *ID           `json:"node_group_id,omitempty" db:"node_group_id"`
-	CreatedAt   time.Time     `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time     `json:"updated_at" db:"updated_at"`
+	ID                 ID            `json:"id" db:"id"`
+	TenantID           ID            `json:"tenant_id" db:"tenant_id"`
+	Name               string        `json:"name" db:"name"`
+	Status             DNSZoneStatus `json:"status" db:"status"`
+	Serial             uint32        `json:"serial" db:"serial"`
+	TTL                int           `json:"ttl" db:"ttl"`
+	NodeGroupID        *ID           `json:"node_group_id,omitempty" db:"node_group_id"`
+	TransferAllowedIPs []string      `json:"transfer_allowed_ips,omitempty"`
+	CreatedAt          time.Time     `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at" db:"updated_at"`
 }
 
 // DNSRecord is a single DNS record within a zone.

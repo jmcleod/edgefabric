@@ -32,10 +32,11 @@ type Service interface {
 
 // ServerStatus represents the runtime status of the route forwarding service.
 type ServerStatus struct {
-	Running        bool   `json:"running"`
-	ActiveRoutes   int    `json:"active_routes"`
-	TCPListeners   int    `json:"tcp_listeners"`
-	UDPListeners   int    `json:"udp_listeners"`
+	Running         bool   `json:"running"`
+	ActiveRoutes    int    `json:"active_routes"`
+	TCPListeners    int    `json:"tcp_listeners"`
+	UDPListeners    int    `json:"udp_listeners"`
+	ICMPRoutes      int    `json:"icmp_routes"`
 	ConnectionsOpen uint64 `json:"connections_open"`
-	BytesForwarded uint64 `json:"bytes_forwarded"`
+	BytesForwarded  uint64 `json:"bytes_forwarded"`
 }

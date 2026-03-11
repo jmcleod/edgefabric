@@ -122,6 +122,7 @@ export function transformDNSZone(api: ApiDNSZone): DNSZone {
     recordCount: 0, // Would need a separate query per zone
     status: api.status === 'active' ? 'healthy' : 'critical',
     serial: api.serial,
+    transferAllowedIPs: api.transfer_allowed_ips || [],
     createdAt: api.created_at,
     lastModified: api.updated_at,
   };
@@ -195,6 +196,7 @@ export function transformRoute(api: ApiRoute): Route {
     id: api.id,
     tenantId: api.tenant_id,
     name: api.name,
+    protocol: api.protocol,
     exposedIp,
     gatewayId: api.gateway_id,
     privateDestination,

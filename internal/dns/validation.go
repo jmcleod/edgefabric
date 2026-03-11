@@ -180,6 +180,20 @@ func isValidHostname(s string) bool {
 	return hostnameRegex.MatchString(clean)
 }
 
+// validateTransferAllowedIPs validates that each entry is a valid IP or CIDR.
+func validateTransferAllowedIPs(ips []string) error {
+	for _, entry := range ips {
+		if ip := net.ParseIP(entry); ip != nil {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(entry); err == nil {
+			continue
+		}
+		return fmt.Errorf("invalid IP or CIDR in transfer_allowed_ips: %q", entry)
+	}
+	return nil
+}
+
 // checkCNAMEExclusivity checks that a CNAME record doesn't conflict with
 // existing records at the same name. CNAME records must be the only record
 // at a given name.

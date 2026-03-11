@@ -32,20 +32,22 @@ type Service interface {
 
 // CreateZoneRequest is the input for creating a DNS zone.
 type CreateZoneRequest struct {
-	TenantID    domain.ID  `json:"tenant_id"`
-	Name        string     `json:"name"`
-	TTL         int        `json:"ttl,omitempty"`
-	NodeGroupID *domain.ID `json:"node_group_id,omitempty"`
+	TenantID           domain.ID  `json:"tenant_id"`
+	Name               string     `json:"name"`
+	TTL                int        `json:"ttl,omitempty"`
+	NodeGroupID        *domain.ID `json:"node_group_id,omitempty"`
+	TransferAllowedIPs []string   `json:"transfer_allowed_ips,omitempty"`
 }
 
 // UpdateZoneRequest is the input for updating a DNS zone.
 type UpdateZoneRequest struct {
-	Name        *string            `json:"name,omitempty"`
+	Name        *string               `json:"name,omitempty"`
 	Status      *domain.DNSZoneStatus `json:"status,omitempty"`
-	TTL         *int               `json:"ttl,omitempty"`
-	NodeGroupID *domain.ID         `json:"node_group_id,omitempty"`
+	TTL         *int                  `json:"ttl,omitempty"`
+	NodeGroupID *domain.ID            `json:"node_group_id,omitempty"`
 	// ClearNodeGroup explicitly removes the node group assignment when true.
-	ClearNodeGroup bool `json:"clear_node_group,omitempty"`
+	ClearNodeGroup     bool      `json:"clear_node_group,omitempty"`
+	TransferAllowedIPs *[]string `json:"transfer_allowed_ips,omitempty"`
 }
 
 // CreateRecordRequest is the input for creating a DNS record.

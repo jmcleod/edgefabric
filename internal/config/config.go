@@ -140,9 +140,10 @@ type BGPConfig struct {
 
 // DNSConfig holds DNS runtime settings for a node.
 type DNSConfig struct {
-	Enabled    bool   `yaml:"enabled"`
-	ListenAddr string `yaml:"listen_addr,omitempty"` // Default ":5353"
-	Mode       string `yaml:"mode,omitempty"`        // "miekg" or "noop", defaults to "noop"
+	Enabled     bool   `yaml:"enabled"`
+	ListenAddr  string `yaml:"listen_addr,omitempty"` // Default ":5353"
+	Mode        string `yaml:"mode,omitempty"`        // "miekg" or "noop", defaults to "noop"
+	AXFREnabled bool   `yaml:"axfr_enabled,omitempty"`
 }
 
 // CDNConfig holds CDN runtime settings for a node.

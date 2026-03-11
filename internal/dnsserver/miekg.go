@@ -28,10 +28,11 @@ type recordKey struct {
 
 // zoneData holds the in-memory representation of a DNS zone.
 type zoneData struct {
-	name    string // FQDN zone name, e.g. "example.com."
-	serial  uint32
-	ttl     uint32
-	records map[recordKey][]mdns.RR // pre-built resource records
+	name                 string // FQDN zone name, e.g. "example.com."
+	serial               uint32
+	ttl                  uint32
+	records              map[recordKey][]mdns.RR // pre-built resource records
+	transferAllowedCIDRs []*net.IPNet            // AXFR ACL
 }
 
 // MiekgService is an authoritative DNS server backed by github.com/miekg/dns.
@@ -52,16 +53,19 @@ type MiekgService struct {
 
 	queriesTotal atomic.Uint64
 
+	axfrEnabled bool
+
 	logger  *slog.Logger
 	metrics *observability.Metrics
 }
 
 // NewMiekgService creates a new miekg/dns authoritative DNS server.
-func NewMiekgService(logger *slog.Logger, metrics *observability.Metrics) *MiekgService {
+func NewMiekgService(logger *slog.Logger, metrics *observability.Metrics, axfrEnabled bool) *MiekgService {
 	return &MiekgService{
-		zones:   make(map[string]*zoneData),
-		logger:  logger,
-		metrics: metrics,
+		zones:       make(map[string]*zoneData),
+		logger:      logger,
+		metrics:     metrics,
+		axfrEnabled: axfrEnabled,
 	}
 }
 
@@ -236,6 +240,12 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 
 	zoneName := zd.name
 
+	// Handle AXFR zone transfer requests.
+	if q.Qtype == mdns.TypeAXFR {
+		s.handleAXFR(w, r, zd, zoneName, start)
+		return
+	}
+
 	// Handle SOA queries.
 	if q.Qtype == mdns.TypeSOA {
 		soa := s.buildSOA(zd)
@@ -389,10 +399,11 @@ func (s *MiekgService) buildZoneData(zwr dns.ZoneWithRecords) *zoneData {
 	}
 
 	zd := &zoneData{
-		name:    zone.Name,
-		serial:  zone.Serial,
-		ttl:     ttl,
-		records: make(map[recordKey][]mdns.RR),
+		name:                 zone.Name,
+		serial:               zone.Serial,
+		ttl:                  ttl,
+		records:              make(map[recordKey][]mdns.RR),
+		transferAllowedCIDRs: parseAllowedCIDRs(zone.TransferAllowedIPs),
 	}
 
 	for _, rec := range zwr.Records {

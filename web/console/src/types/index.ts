@@ -74,6 +74,7 @@ export interface DNSZone {
   recordCount: number;
   status: HealthStatus;
   serial: number;
+  transferAllowedIPs: string[];
   createdAt: string;
   lastModified: string;
 }
@@ -136,6 +137,7 @@ export interface Route {
   id: string;
   tenantId: string;
   name: string;
+  protocol: 'tcp' | 'udp' | 'icmp' | 'all';
   exposedIp: string;
   gatewayId: string;
   privateDestination: string;

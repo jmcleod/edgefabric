@@ -323,7 +323,7 @@ func initDNSService(cfg config.DNSConfig, logger *slog.Logger, metrics *observab
 	switch mode {
 	case "miekg":
 		logger.Info("using miekg/dns authoritative DNS service")
-		return dnsserver.NewMiekgService(logger, metrics)
+		return dnsserver.NewMiekgService(logger, metrics, cfg.AXFREnabled)
 	case "noop":
 		logger.Info("using noop DNS service (demo mode)")
 		return dnsserver.NewNoopService()

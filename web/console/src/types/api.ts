@@ -77,6 +77,7 @@ export interface ApiDNSZone {
   serial: number;
   ttl: number;
   node_group_id?: string;
+  transfer_allowed_ips?: string[];
   created_at: string;
   updated_at: string;
 }

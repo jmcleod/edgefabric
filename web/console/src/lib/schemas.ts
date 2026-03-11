@@ -61,6 +61,7 @@ export const dnsZoneSchema = z.object({
   name: z.string().min(1, 'Zone name is required').regex(/^[a-zA-Z0-9.-]+$/, 'Invalid zone name'),
   ttl: z.coerce.number().int().min(60).max(86400).default(3600),
   node_group_id: z.string().optional(),
+  transfer_allowed_ips: z.string().optional().default(''),
 });
 export type DNSZoneFormData = z.infer<typeof dnsZoneSchema>;
 

@@ -26,6 +26,7 @@ const zoneFields: FieldConfig<DNSZoneFormData>[] = [
   { name: 'name', label: 'Zone Name', placeholder: 'example.com' },
   { name: 'ttl', label: 'Default TTL (seconds)', type: 'number', placeholder: '3600' },
   { name: 'node_group_id', label: 'Node Group ID', placeholder: 'Optional — assign to a node group' },
+  { name: 'transfer_allowed_ips', label: 'AXFR Allowed IPs', placeholder: '10.0.0.1, 192.168.1.0/24', description: 'Comma-separated IPs or CIDRs allowed to perform zone transfers. Leave empty to disable AXFR.' },
 ];
 
 export default function DNSZonesPage() {
@@ -125,7 +126,7 @@ export default function DNSZonesPage() {
         title="Add DNS Zone"
         description="Create a new authoritative DNS zone."
         schema={dnsZoneSchema}
-        defaultValues={{ name: '', ttl: 3600, node_group_id: '' }}
+        defaultValues={{ name: '', ttl: 3600, node_group_id: '', transfer_allowed_ips: '' }}
         fields={zoneFields}
         onSubmit={async (data) => {
           await createZone.mutateAsync(data);

@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -30,11 +31,17 @@ func (s *SQLiteStore) CreateDNSZone(ctx context.Context, z *domain.DNSZone) erro
 		nodeGroupID = &s
 	}
 
+	transferIPs := "[]"
+	if len(z.TransferAllowedIPs) > 0 {
+		b, _ := json.Marshal(z.TransferAllowedIPs)
+		transferIPs = string(b)
+	}
+
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO dns_zones (id, tenant_id, name, status, serial, ttl, node_group_id, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO dns_zones (id, tenant_id, name, status, serial, ttl, node_group_id, transfer_allowed_ips, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		z.ID.String(), z.TenantID.String(), z.Name,
-		string(z.Status), z.Serial, z.TTL, nodeGroupID,
+		string(z.Status), z.Serial, z.TTL, nodeGroupID, transferIPs,
 		z.CreatedAt, z.UpdatedAt,
 	)
 	if err != nil {
@@ -48,17 +55,22 @@ func (s *SQLiteStore) CreateDNSZone(ctx context.Context, z *domain.DNSZone) erro
 
 func (s *SQLiteStore) GetDNSZone(ctx context.Context, id domain.ID) (*domain.DNSZone, error) {
 	z := &domain.DNSZone{}
+	var transferIPs string
 
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, tenant_id, name, status, serial, ttl, node_group_id, created_at, updated_at
+		`SELECT id, tenant_id, name, status, serial, ttl, node_group_id, transfer_allowed_ips, created_at, updated_at
 		 FROM dns_zones WHERE id = ?`, id.String(),
 	).Scan(&z.ID, &z.TenantID, &z.Name, &z.Status, &z.Serial,
-		&z.TTL, &z.NodeGroupID, &z.CreatedAt, &z.UpdatedAt)
+		&z.TTL, &z.NodeGroupID, &transferIPs, &z.CreatedAt, &z.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get dns zone: %w", err)
+	}
+
+	if transferIPs != "" {
+		_ = json.Unmarshal([]byte(transferIPs), &z.TransferAllowedIPs)
 	}
 
 	return z, nil
@@ -78,7 +90,7 @@ func (s *SQLiteStore) ListDNSZones(ctx context.Context, tenantID domain.ID, para
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, tenant_id, name, status, serial, ttl, node_group_id, created_at, updated_at
+		`SELECT id, tenant_id, name, status, serial, ttl, node_group_id, transfer_allowed_ips, created_at, updated_at
 		 FROM dns_zones WHERE tenant_id = ? ORDER BY name ASC LIMIT ? OFFSET ?`,
 		tenantID.String(), params.Limit, params.Offset,
 	)
@@ -90,9 +102,13 @@ func (s *SQLiteStore) ListDNSZones(ctx context.Context, tenantID domain.ID, para
 	var zones []*domain.DNSZone
 	for rows.Next() {
 		z := &domain.DNSZone{}
+		var transferIPs string
 		if err := rows.Scan(&z.ID, &z.TenantID, &z.Name, &z.Status, &z.Serial,
-			&z.TTL, &z.NodeGroupID, &z.CreatedAt, &z.UpdatedAt); err != nil {
+			&z.TTL, &z.NodeGroupID, &transferIPs, &z.CreatedAt, &z.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan dns zone: %w", err)
+		}
+		if transferIPs != "" {
+			_ = json.Unmarshal([]byte(transferIPs), &z.TransferAllowedIPs)
 		}
 		zones = append(zones, z)
 	}
@@ -108,10 +124,16 @@ func (s *SQLiteStore) UpdateDNSZone(ctx context.Context, z *domain.DNSZone) erro
 		nodeGroupID = &s
 	}
 
+	transferIPs := "[]"
+	if len(z.TransferAllowedIPs) > 0 {
+		b, _ := json.Marshal(z.TransferAllowedIPs)
+		transferIPs = string(b)
+	}
+
 	result, err := s.db.ExecContext(ctx,
-		`UPDATE dns_zones SET name = ?, status = ?, ttl = ?, node_group_id = ?, updated_at = ?
+		`UPDATE dns_zones SET name = ?, status = ?, ttl = ?, node_group_id = ?, transfer_allowed_ips = ?, updated_at = ?
 		 WHERE id = ?`,
-		z.Name, string(z.Status), z.TTL, nodeGroupID,
+		z.Name, string(z.Status), z.TTL, nodeGroupID, transferIPs,
 		z.UpdatedAt, z.ID.String(),
 	)
 	if err != nil {
