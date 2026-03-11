@@ -99,6 +99,15 @@ export interface CDNService {
   bandwidthGb: number;
   requestsM: number;
   createdAt: string;
+  domains: string[];
+  tlsMode: string;
+  cacheEnabled: boolean;
+  cacheTtl: number;
+  compressionEnabled: boolean;
+  rateLimitRps?: number;
+  wafEnabled: boolean;
+  wafMode: string;
+  nodeGroupId?: string;
 }
 
 export interface CDNDomain {
@@ -119,6 +128,8 @@ export interface CDNOrigin {
   protocol: 'http' | 'https';
   weight: number;
   status: HealthStatus;
+  healthCheckPath?: string;
+  healthCheckInterval?: number;
 }
 
 export interface Route {

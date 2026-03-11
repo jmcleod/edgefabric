@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -28,10 +29,11 @@ import { Loader2 } from 'lucide-react';
 export interface FieldConfig<T extends FieldValues> {
   name: Path<T>;
   label: string;
-  type?: 'text' | 'number' | 'email' | 'password' | 'select' | 'textarea';
+  type?: 'text' | 'number' | 'email' | 'password' | 'select' | 'textarea' | 'switch';
   placeholder?: string;
   options?: { label: string; value: string }[];
   description?: string;
+  visibleWhen?: { field: Path<T>; value: unknown };
 }
 
 interface FormDialogProps<T extends FieldValues> {
@@ -75,6 +77,9 @@ export function FormDialog<T extends FieldValues>({
     await onSubmit(data);
   });
 
+  // Watch all fields to support visibleWhen
+  const watchedValues = form.watch();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -84,48 +89,74 @@ export function FormDialog<T extends FieldValues>({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {fields.map((field) => {
+            // Conditional visibility
+            if (field.visibleWhen) {
+              const depValue = watchedValues[field.visibleWhen.field];
+              if (depValue !== field.visibleWhen.value) {
+                return null;
+              }
+            }
+
             const error = form.formState.errors[field.name];
             return (
               <div key={field.name} className="space-y-2">
-                <Label htmlFor={field.name}>{field.label}</Label>
-                {field.type === 'select' ? (
-                  <Select
-                    value={form.watch(field.name) as string}
-                    onValueChange={(value) => form.setValue(field.name, value as T[Path<T>])}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={field.placeholder || `Select ${field.label.toLowerCase()}`} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {field.options?.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : field.type === 'textarea' ? (
-                  <textarea
-                    id={field.name}
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder={field.placeholder}
-                    {...form.register(field.name)}
-                  />
+                {field.type === 'switch' ? (
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <Label htmlFor={field.name}>{field.label}</Label>
+                      {field.description && (
+                        <p className="text-xs text-muted-foreground">{field.description}</p>
+                      )}
+                    </div>
+                    <Switch
+                      id={field.name}
+                      checked={!!form.watch(field.name)}
+                      onCheckedChange={(checked) => form.setValue(field.name, checked as T[Path<T>])}
+                    />
+                  </div>
                 ) : (
-                  <Input
-                    id={field.name}
-                    type={field.type || 'text'}
-                    placeholder={field.placeholder}
-                    {...form.register(field.name, {
-                      valueAsNumber: field.type === 'number',
-                    })}
-                  />
-                )}
-                {field.description && (
-                  <p className="text-xs text-muted-foreground">{field.description}</p>
-                )}
-                {error && (
-                  <p className="text-xs text-destructive">{error.message as string}</p>
+                  <>
+                    <Label htmlFor={field.name}>{field.label}</Label>
+                    {field.type === 'select' ? (
+                      <Select
+                        value={form.watch(field.name) as string}
+                        onValueChange={(value) => form.setValue(field.name, value as T[Path<T>])}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={field.placeholder || `Select ${field.label.toLowerCase()}`} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {field.options?.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : field.type === 'textarea' ? (
+                      <textarea
+                        id={field.name}
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder={field.placeholder}
+                        {...form.register(field.name)}
+                      />
+                    ) : (
+                      <Input
+                        id={field.name}
+                        type={field.type || 'text'}
+                        placeholder={field.placeholder}
+                        {...form.register(field.name, {
+                          valueAsNumber: field.type === 'number',
+                        })}
+                      />
+                    )}
+                    {field.description && field.type !== 'switch' && (
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                    )}
+                    {error && (
+                      <p className="text-xs text-destructive">{error.message as string}</p>
+                    )}
+                  </>
                 )}
               </div>
             );

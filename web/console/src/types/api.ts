@@ -108,6 +108,8 @@ export interface ApiCDNSite {
   rate_limit_rps?: number;
   node_group_id?: string;
   header_rules?: unknown;
+  waf_enabled: boolean;
+  waf_mode?: string;
   status: 'active' | 'disabled';
   created_at: string;
   updated_at: string;

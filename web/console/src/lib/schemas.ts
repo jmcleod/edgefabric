@@ -87,6 +87,8 @@ export const cdnSiteSchema = z.object({
   cache_ttl: z.coerce.number().int().min(0).default(3600),
   compression_enabled: z.boolean().default(true),
   rate_limit_rps: z.coerce.number().int().min(0).optional(),
+  waf_enabled: z.boolean().default(false),
+  waf_mode: z.enum(['detect', 'block']).default('detect'),
   node_group_id: z.string().optional(),
 });
 export type CDNSiteFormData = z.infer<typeof cdnSiteSchema>;

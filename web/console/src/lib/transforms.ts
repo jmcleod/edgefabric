@@ -151,6 +151,15 @@ export function transformCDNSite(api: ApiCDNSite): CDNService {
     bandwidthGb: 0,  // Not tracked in backend
     requestsM: 0,    // Not tracked in backend
     createdAt: api.created_at,
+    domains: api.domains || [],
+    tlsMode: api.tls_mode,
+    cacheEnabled: api.cache_enabled,
+    cacheTtl: api.cache_ttl,
+    compressionEnabled: api.compression_enabled,
+    rateLimitRps: api.rate_limit_rps,
+    wafEnabled: api.waf_enabled,
+    wafMode: api.waf_mode || 'detect',
+    nodeGroupId: api.node_group_id,
   };
 }
 
@@ -169,6 +178,8 @@ export function transformCDNOrigin(api: ApiCDNOrigin): CDNOrigin {
     protocol: api.scheme,
     weight: api.weight,
     status: api.status === 'healthy' ? 'healthy' : api.status === 'unhealthy' ? 'critical' : 'unknown',
+    healthCheckPath: api.health_check_path,
+    healthCheckInterval: api.health_check_interval,
   };
 }
 

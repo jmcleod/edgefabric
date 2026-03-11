@@ -17,11 +17,13 @@ import {
   useUpdateCDNOrigin,
   useDeleteCDNOrigin,
   useDeleteCDNSite,
+  useUpdateCDNSite,
   usePurgeCache,
 } from '@/hooks/useCDN';
-import { cdnOriginSchema, type CDNOriginFormData, cachePurgeSchema, type CachePurgeFormData } from '@/lib/schemas';
+import { cdnOriginSchema, type CDNOriginFormData, cdnSiteSchema, type CDNSiteFormData, cachePurgeSchema, type CachePurgeFormData } from '@/lib/schemas';
+import { siteFields } from '@/pages/CDNServicesPage';
 import type { CDNOrigin } from '@/types';
-import { Layers, ArrowLeft, Trash2, MoreHorizontal, Pencil, RefreshCw } from 'lucide-react';
+import { Layers, ArrowLeft, Trash2, MoreHorizontal, Pencil, RefreshCw, Shield, ShieldAlert } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,12 +63,14 @@ export default function CDNSiteDetailPage() {
   const updateOrigin = useUpdateCDNOrigin();
   const deleteOrigin = useDeleteCDNOrigin();
   const deleteSite = useDeleteCDNSite();
+  const updateSite = useUpdateCDNSite();
   const purgeCache = usePurgeCache(id || '');
 
   const [createOriginOpen, setCreateOriginOpen] = useState(false);
   const [editOriginTarget, setEditOriginTarget] = useState<CDNOrigin | null>(null);
   const [deleteOriginTarget, setDeleteOriginTarget] = useState<CDNOrigin | null>(null);
   const [deleteSiteOpen, setDeleteSiteOpen] = useState(false);
+  const [editSiteOpen, setEditSiteOpen] = useState(false);
 
   const purgeForm = useForm<CachePurgeFormData>({
     resolver: zodResolver(cachePurgeSchema),
@@ -179,6 +183,9 @@ export default function CDNSiteDetailPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditSiteOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" /> Edit
+            </Button>
             <Button variant="destructive" size="sm" onClick={() => setDeleteSiteOpen(true)}>
               <Trash2 className="mr-2 h-4 w-4" /> Delete Site
             </Button>
@@ -202,9 +209,59 @@ export default function CDNSiteDetailPage() {
               <CardContent className="space-y-3">
                 <InfoRow label="ID" value={site.id} mono />
                 <InfoRow label="Name" value={site.name} />
-                <InfoRow label="Domains" value={String(site.domainCount)} />
-                <InfoRow label="Origins" value={String(site.originCount)} />
+                <InfoRow label="Domains" value={site.domains.length > 0 ? site.domains.join(', ') : 'None'} />
+                <InfoRow label="TLS Mode" value={site.tlsMode.toUpperCase()} />
                 <InfoRow label="Created" value={new Date(site.createdAt).toLocaleDateString()} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Configuration</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <InfoRow label="Caching" value={site.cacheEnabled ? `Enabled (TTL: ${site.cacheTtl}s)` : 'Disabled'} />
+                <InfoRow label="Compression" value={site.compressionEnabled ? 'Brotli + Gzip' : 'Disabled'} />
+                <InfoRow label="Rate Limit" value={site.rateLimitRps ? `${site.rateLimitRps} req/s` : 'Unlimited'} />
+                <InfoRow label="Node Group" value={site.nodeGroupId || 'Default'} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  {site.wafEnabled ? (
+                    <ShieldAlert className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Shield className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  Security &amp; WAF
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center py-1 border-b border-border/50">
+                  <span className="text-sm text-muted-foreground">WAF Status</span>
+                  <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                    site.wafEnabled
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {site.wafEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+                {site.wafEnabled && (
+                  <div className="flex justify-between items-center py-1 border-b border-border/50">
+                    <span className="text-sm text-muted-foreground">WAF Mode</span>
+                    <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                      site.wafMode === 'block'
+                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    }`}>
+                      {site.wafMode === 'block' ? 'Block' : 'Detect Only'}
+                    </span>
+                  </div>
+                )}
+                <InfoRow label="Tenant ID" value={site.tenantId} mono />
               </CardContent>
             </Card>
 
@@ -215,8 +272,7 @@ export default function CDNSiteDetailPage() {
               <CardContent className="space-y-3">
                 <InfoRow label="Bandwidth" value={`${site.bandwidthGb.toFixed(1)} GB`} />
                 <InfoRow label="Requests" value={`${site.requestsM.toFixed(1)}M`} />
-                <InfoRow label="Status" value={site.status} />
-                <InfoRow label="Tenant ID" value={site.tenantId} mono />
+                <InfoRow label="Origins" value={String(site.originCount)} />
               </CardContent>
             </Card>
           </div>
@@ -278,6 +334,34 @@ export default function CDNSiteDetailPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Edit Site Dialog */}
+      <FormDialog<CDNSiteFormData>
+        open={editSiteOpen}
+        onOpenChange={setEditSiteOpen}
+        title="Edit CDN Service"
+        description="Update CDN site configuration."
+        schema={cdnSiteSchema}
+        defaultValues={{
+          name: site.name,
+          domains: site.domains.join(', '),
+          tls_mode: site.tlsMode as 'auto' | 'manual' | 'disabled',
+          cache_enabled: site.cacheEnabled,
+          cache_ttl: site.cacheTtl,
+          compression_enabled: site.compressionEnabled,
+          rate_limit_rps: site.rateLimitRps || 0,
+          waf_enabled: site.wafEnabled,
+          waf_mode: (site.wafMode as 'detect' | 'block') || 'detect',
+          node_group_id: site.nodeGroupId || '',
+        }}
+        fields={siteFields}
+        onSubmit={async (data) => {
+          await updateSite.mutateAsync({ id: site.id, body: data });
+          setEditSiteOpen(false);
+        }}
+        isSubmitting={updateSite.isPending}
+        submitLabel="Save Changes"
+      />
+
       {/* Create Origin Dialog */}
       <FormDialog<CDNOriginFormData>
         open={createOriginOpen}
@@ -306,6 +390,8 @@ export default function CDNSiteDetailPage() {
             address: editOriginTarget.hostname,
             scheme: editOriginTarget.protocol,
             weight: editOriginTarget.weight,
+            health_check_path: editOriginTarget.healthCheckPath || '',
+            health_check_interval: editOriginTarget.healthCheckInterval || 30,
           }}
           fields={originFields}
           onSubmit={async (data) => {

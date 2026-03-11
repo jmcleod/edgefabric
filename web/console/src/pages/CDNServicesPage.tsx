@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const siteFields: FieldConfig<CDNSiteFormData>[] = [
+export const siteFields: FieldConfig<CDNSiteFormData>[] = [
   { name: 'name', label: 'Name', placeholder: 'my-cdn-site' },
   { name: 'domains', label: 'Domains', placeholder: 'cdn.example.com (comma-separated)', description: 'Comma-separated list of domains' },
   {
@@ -34,9 +34,37 @@ const siteFields: FieldConfig<CDNSiteFormData>[] = [
       { label: 'Disabled', value: 'disabled' },
     ],
   },
+  { name: 'cache_enabled', label: 'Enable Caching', type: 'switch' },
   { name: 'cache_ttl', label: 'Cache TTL (seconds)', type: 'number', placeholder: '3600' },
+  { name: 'compression_enabled', label: 'Enable Compression (Brotli + Gzip)', type: 'switch' },
+  { name: 'rate_limit_rps', label: 'Rate Limit (req/s)', type: 'number', placeholder: '0 = unlimited' },
+  { name: 'waf_enabled', label: 'Enable WAF', type: 'switch', description: 'Web Application Firewall protects against SQLi, XSS, and path traversal attacks' },
+  {
+    name: 'waf_mode',
+    label: 'WAF Mode',
+    type: 'select',
+    options: [
+      { label: 'Detect Only (log matches)', value: 'detect' },
+      { label: 'Block (return 403)', value: 'block' },
+    ],
+    visibleWhen: { field: 'waf_enabled', value: true },
+  },
   { name: 'node_group_id', label: 'Node Group ID', placeholder: 'Optional — assign to a node group' },
 ];
+
+function FeatureBadge({ label, enabled }: { label: string; enabled: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${
+        enabled
+          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+          : 'bg-muted text-muted-foreground'
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
 
 export default function CDNServicesPage() {
   const navigate = useNavigate();
@@ -77,9 +105,15 @@ export default function CDNServicesPage() {
       ),
     },
     {
-      key: 'originCount',
-      header: 'Origins',
-      render: (service) => <span className="text-sm">{service.originCount}</span>,
+      key: 'features',
+      header: 'Features',
+      render: (service) => (
+        <div className="flex flex-wrap gap-1">
+          <FeatureBadge label="Cache" enabled={service.cacheEnabled} />
+          <FeatureBadge label="Brotli" enabled={service.compressionEnabled} />
+          <FeatureBadge label="WAF" enabled={service.wafEnabled} />
+        </div>
+      ),
     },
     {
       key: 'actions',
@@ -136,7 +170,7 @@ export default function CDNServicesPage() {
         title="Create CDN Service"
         description="Set up a new CDN site for content delivery."
         schema={cdnSiteSchema}
-        defaultValues={{ name: '', domains: '', tls_mode: 'auto', cache_enabled: true, cache_ttl: 3600, compression_enabled: true, node_group_id: '' }}
+        defaultValues={{ name: '', domains: '', tls_mode: 'auto', cache_enabled: true, cache_ttl: 3600, compression_enabled: true, rate_limit_rps: 0, waf_enabled: false, waf_mode: 'detect', node_group_id: '' }}
         fields={siteFields}
         onSubmit={async (data) => {
           await createSite.mutateAsync(data);
