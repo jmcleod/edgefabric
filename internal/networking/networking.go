@@ -18,17 +18,19 @@ var _ Service = (*DefaultService)(nil)
 
 // DefaultService implements the networking Service interface.
 type DefaultService struct {
-	nodes    storage.NodeStore
-	peers    storage.WireGuardPeerStore
-	bgp      storage.BGPSessionStore
-	ips      storage.IPAllocationStore
-	secrets  *secrets.Store
-	wgConfig config.WireGuardHub
+	nodes      storage.NodeStore
+	nodeGroups storage.NodeGroupStore
+	peers      storage.WireGuardPeerStore
+	bgp        storage.BGPSessionStore
+	ips        storage.IPAllocationStore
+	secrets    *secrets.Store
+	wgConfig   config.WireGuardHub
 }
 
 // NewService creates a new DefaultService.
 func NewService(
 	nodes storage.NodeStore,
+	nodeGroups storage.NodeGroupStore,
 	peers storage.WireGuardPeerStore,
 	bgp storage.BGPSessionStore,
 	ips storage.IPAllocationStore,
@@ -36,12 +38,13 @@ func NewService(
 	wgConfig config.WireGuardHub,
 ) Service {
 	return &DefaultService{
-		nodes:    nodes,
-		peers:    peers,
-		bgp:      bgp,
-		ips:      ips,
-		secrets:  secrets,
-		wgConfig: wgConfig,
+		nodes:      nodes,
+		nodeGroups: nodeGroups,
+		peers:      peers,
+		bgp:        bgp,
+		ips:        ips,
+		secrets:    secrets,
+		wgConfig:   wgConfig,
 	}
 }
 
@@ -240,9 +243,15 @@ func (s *DefaultService) GenerateHubConfig(ctx context.Context) (string, error) 
 		peerConfigs = append(peerConfigs, pc)
 	}
 
+	// Build dual-stack address.
+	hubAddr := s.wgConfig.Address
+	if s.wgConfig.IPv6Address != "" {
+		hubAddr = hubAddr + ", " + s.wgConfig.IPv6Address
+	}
+
 	cfg := &WireGuardConfig{
 		PrivateKey: privKey,
-		Address:    s.wgConfig.Address,
+		Address:    hubAddr,
 		ListenPort: s.wgConfig.ListenPort,
 		Peers:      peerConfigs,
 	}
@@ -275,10 +284,15 @@ func (s *DefaultService) GenerateNodeConfig(ctx context.Context, nodeID domain.I
 		return "", fmt.Errorf("get controller peer: %w", err)
 	}
 
-	// Build hub peer config.
+	// Build hub peer config with dual-stack AllowedIPs.
+	hubAllowedIPs := []string{s.wgConfig.Subnet}
+	if s.wgConfig.IPv6Subnet != "" {
+		hubAllowedIPs = append(hubAllowedIPs, s.wgConfig.IPv6Subnet)
+	}
+
 	hubPeer := WireGuardPeerConfig{
 		PublicKey:           ctrlPeer.PublicKey,
-		AllowedIPs:          []string{s.wgConfig.Subnet},
+		AllowedIPs:          hubAllowedIPs,
 		Endpoint:            ctrlPeer.Endpoint,
 		PersistentKeepalive: 25,
 	}
@@ -292,16 +306,33 @@ func (s *DefaultService) GenerateNodeConfig(ctx context.Context, nodeID domain.I
 		hubPeer.PresharedKey = psk
 	}
 
-	// Node address is its WireGuard IP as /32.
-	nodeAddr := node.WireGuardIP + "/32"
+	// Node address is its WireGuard IP as /32, plus IPv6 if assigned.
 	if node.WireGuardIP == "" {
 		return "", fmt.Errorf("node %s has no WireGuard IP assigned", nodeID)
+	}
+	nodeAddr := node.WireGuardIP + "/32"
+	if node.WireGuardIPv6 != "" {
+		nodeAddr = nodeAddr + ", " + node.WireGuardIPv6 + "/128"
+	}
+
+	peers := []WireGuardPeerConfig{hubPeer}
+	listenPort := 0
+
+	// If mesh topology, add direct peers from shared node groups.
+	if s.wgConfig.Topology == "mesh" && s.nodeGroups != nil {
+		meshPeers, meshPort, err := s.generateMeshPeers(ctx, node)
+		if err != nil {
+			return "", fmt.Errorf("generate mesh peers: %w", err)
+		}
+		peers = append(peers, meshPeers...)
+		listenPort = meshPort
 	}
 
 	cfg := &WireGuardConfig{
 		PrivateKey: nodePrivKey,
 		Address:    nodeAddr,
-		Peers:      []WireGuardPeerConfig{hubPeer},
+		ListenPort: listenPort,
+		Peers:      peers,
 	}
 
 	return cfg.Render(), nil

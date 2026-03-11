@@ -145,7 +145,8 @@ export default function NodeDetailPage() {
               <CardContent className="space-y-3">
                 <InfoRow label="Hostname" value={node.hostname} mono />
                 <InfoRow label="IPv4 Address" value={node.ipv4} mono />
-                {node.ipv6 && <InfoRow label="IPv6 / WireGuard IP" value={node.ipv6} mono />}
+                {node.ipv6 && <InfoRow label="WireGuard IPv4" value={node.ipv6} mono />}
+                {node.wireGuardIPv6 && <InfoRow label="WireGuard IPv6" value={node.wireGuardIPv6} mono />}
                 <InfoRow label="Location" value={node.location} />
                 <InfoRow label="Region" value={node.region} />
                 <InfoRow label="Last Seen" value={

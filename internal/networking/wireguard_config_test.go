@@ -138,3 +138,106 @@ func TestWireGuardConfigRenderDNS(t *testing.T) {
 		t.Error("expected DNS setting")
 	}
 }
+
+func TestWireGuardConfigRenderMeshNode(t *testing.T) {
+	cfg := &WireGuardConfig{
+		PrivateKey: "mesh-node-private-key",
+		Address:    "10.100.0.5/32",
+		ListenPort: 51820, // Mesh nodes must listen.
+		Peers: []WireGuardPeerConfig{
+			{
+				// Hub peer (always first).
+				PublicKey:           "hub-pub-key",
+				PresharedKey:        "psk-hub",
+				AllowedIPs:          []string{"10.100.0.0/16"},
+				Endpoint:            "controller.example.com:51820",
+				PersistentKeepalive: 25,
+			},
+			{
+				// Mesh peer 1.
+				PublicKey:           "peer1-pub-key",
+				AllowedIPs:          []string{"10.100.0.6/32"},
+				Endpoint:            "203.0.113.6:51820",
+				PersistentKeepalive: 25,
+			},
+			{
+				// Mesh peer 2.
+				PublicKey:           "peer2-pub-key",
+				AllowedIPs:          []string{"10.100.0.7/32"},
+				Endpoint:            "203.0.113.7:51820",
+				PersistentKeepalive: 25,
+			},
+		},
+	}
+
+	rendered := cfg.Render()
+
+	// Mesh node should have ListenPort.
+	if !strings.Contains(rendered, "ListenPort = 51820") {
+		t.Error("mesh node should have ListenPort")
+	}
+
+	// Should have 3 peers.
+	peerCount := strings.Count(rendered, "[Peer]")
+	if peerCount != 3 {
+		t.Errorf("expected 3 peer sections, got %d", peerCount)
+	}
+
+	// Hub peer should have full subnet AllowedIPs.
+	if !strings.Contains(rendered, "AllowedIPs = 10.100.0.0/16") {
+		t.Error("expected hub AllowedIPs for full subnet")
+	}
+
+	// Mesh peers should have /32 AllowedIPs.
+	if !strings.Contains(rendered, "AllowedIPs = 10.100.0.6/32") {
+		t.Error("expected mesh peer1 AllowedIPs /32")
+	}
+	if !strings.Contains(rendered, "AllowedIPs = 10.100.0.7/32") {
+		t.Error("expected mesh peer2 AllowedIPs /32")
+	}
+
+	// All peers should have PersistentKeepalive.
+	keepaliveCount := strings.Count(rendered, "PersistentKeepalive = 25")
+	if keepaliveCount != 3 {
+		t.Errorf("expected 3 PersistentKeepalive entries, got %d", keepaliveCount)
+	}
+}
+
+func TestWireGuardConfigRenderDualStack(t *testing.T) {
+	cfg := &WireGuardConfig{
+		PrivateKey: "dual-stack-key",
+		Address:    "10.100.0.5/32, fd00:ef::5/128", // Dual-stack address.
+		ListenPort: 51820,
+		Peers: []WireGuardPeerConfig{
+			{
+				PublicKey:           "hub-pub-key",
+				AllowedIPs:          []string{"10.100.0.0/16", "fd00:ef::/48"},
+				Endpoint:            "controller.example.com:51820",
+				PersistentKeepalive: 25,
+			},
+			{
+				PublicKey:           "peer-pub-key",
+				AllowedIPs:          []string{"10.100.0.6/32", "fd00:ef::6/128"},
+				Endpoint:            "203.0.113.6:51820",
+				PersistentKeepalive: 25,
+			},
+		},
+	}
+
+	rendered := cfg.Render()
+
+	// Verify dual-stack Address.
+	if !strings.Contains(rendered, "Address = 10.100.0.5/32, fd00:ef::5/128") {
+		t.Error("expected dual-stack address line")
+	}
+
+	// Verify hub peer dual-stack AllowedIPs.
+	if !strings.Contains(rendered, "AllowedIPs = 10.100.0.0/16, fd00:ef::/48") {
+		t.Error("expected hub dual-stack AllowedIPs")
+	}
+
+	// Verify mesh peer dual-stack AllowedIPs.
+	if !strings.Contains(rendered, "AllowedIPs = 10.100.0.6/32, fd00:ef::6/128") {
+		t.Error("expected mesh peer dual-stack AllowedIPs")
+	}
+}

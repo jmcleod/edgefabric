@@ -137,6 +137,15 @@ func (s *GoBGPService) Reconcile(ctx context.Context, desired []*domain.BGPSessi
 						Enabled: true,
 					},
 				},
+				{
+					Config: &apipb.AfiSafiConfig{
+						Family: &apipb.Family{
+							Afi:  apipb.Family_AFI_IP6,
+							Safi: apipb.Family_SAFI_UNICAST,
+						},
+						Enabled: true,
+					},
+				},
 			},
 		}
 
@@ -242,6 +251,7 @@ func (s *GoBGPService) WithdrawPrefix(ctx context.Context, prefix string) error 
 }
 
 // announcePrefix adds a BGP path for the given prefix (must be called with lock held).
+// Supports both IPv4 and IPv6 prefixes — the address family is auto-detected from the CIDR.
 func (s *GoBGPService) announcePrefix(ctx context.Context, prefix string, nextHop string) error {
 	ip, ipNet, err := net.ParseCIDR(prefix)
 	if err != nil {
@@ -249,6 +259,7 @@ func (s *GoBGPService) announcePrefix(ctx context.Context, prefix string, nextHo
 	}
 
 	prefixLen, _ := ipNet.Mask.Size()
+	isIPv6 := ip.To4() == nil
 
 	nlri, err := anypb.New(&apipb.IPAddressPrefix{
 		PrefixLen: uint32(prefixLen),
@@ -265,21 +276,39 @@ func (s *GoBGPService) announcePrefix(ctx context.Context, prefix string, nextHo
 		return fmt.Errorf("marshal origin: %w", err)
 	}
 
-	nh, err := anypb.New(&apipb.NextHopAttribute{
-		NextHop: nextHop,
-	})
-	if err != nil {
-		return fmt.Errorf("marshal next hop: %w", err)
+	// Build path attributes — IPv6 uses MpReachNLRI for next-hop, IPv4 uses NextHopAttribute.
+	pattrs := []*anypb.Any{origin}
+	family := &apipb.Family{
+		Afi:  apipb.Family_AFI_IP,
+		Safi: apipb.Family_SAFI_UNICAST,
+	}
+
+	if isIPv6 {
+		family.Afi = apipb.Family_AFI_IP6
+		mpReach, err := anypb.New(&apipb.MpReachNLRIAttribute{
+			Family: family,
+			NextHops: []string{nextHop},
+			Nlris:    []*anypb.Any{nlri},
+		})
+		if err != nil {
+			return fmt.Errorf("marshal mp reach nlri: %w", err)
+		}
+		pattrs = append(pattrs, mpReach)
+	} else {
+		nh, err := anypb.New(&apipb.NextHopAttribute{
+			NextHop: nextHop,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal next hop: %w", err)
+		}
+		pattrs = append(pattrs, nh)
 	}
 
 	resp, err := s.server.AddPath(ctx, &apipb.AddPathRequest{
 		Path: &apipb.Path{
-			Family: &apipb.Family{
-				Afi:  apipb.Family_AFI_IP,
-				Safi: apipb.Family_SAFI_UNICAST,
-			},
+			Family: family,
 			Nlri:   nlri,
-			Pattrs: []*anypb.Any{origin, nh},
+			Pattrs: pattrs,
 		},
 	})
 	if err != nil {

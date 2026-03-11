@@ -36,10 +36,10 @@ func (s *PostgresStore) CreateNode(ctx context.Context, n *domain.Node) error {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO nodes (id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider, ssh_port, ssh_user, ssh_key_id, binary_version, metadata, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+		`INSERT INTO nodes (id, tenant_id, name, hostname, public_ip, wireguard_ip, wireguard_ipv6, status, region, provider, ssh_port, ssh_user, ssh_key_id, binary_version, metadata, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
 		n.ID.String(), nullIDString(n.TenantID), n.Name, n.Hostname, n.PublicIP,
-		nullString(&n.WireGuardIP), string(n.Status), nullString(&n.Region),
+		nullString(&n.WireGuardIP), n.WireGuardIPv6, string(n.Status), nullString(&n.Region),
 		nullString(&n.Provider), n.SSHPort, n.SSHUser, nullIDString(n.SSHKeyID),
 		nullString(&n.BinaryVersion), metadata, n.CreatedAt, n.UpdatedAt,
 	)
@@ -70,10 +70,10 @@ func (s *PostgresStore) GetNode(ctx context.Context, id domain.ID) (*domain.Node
 	var lastHeartbeat, lastConfigSync sql.NullTime
 
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
+		`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, wireguard_ipv6, status, region, provider,
 		        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at
 		 FROM nodes WHERE id = $1`, id.String(),
-	).Scan(&n.ID, &tenantID, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.Status,
+	).Scan(&n.ID, &tenantID, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.WireGuardIPv6, &n.Status,
 		&region, &provider, &n.SSHPort, &n.SSHUser, &sshKeyID, &binaryVersion,
 		&lastHeartbeat, &lastConfigSync, &metadata, &n.CreatedAt, &n.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -115,7 +115,7 @@ func (s *PostgresStore) ListNodes(ctx context.Context, tenantID *domain.ID, para
 		return nil, 0, fmt.Errorf("count nodes: %w", countErr)
 	}
 
-	const selectCols = `id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
+	const selectCols = `id, tenant_id, name, hostname, public_ip, wireguard_ip, wireguard_ipv6, status, region, provider,
 			ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at`
 
 	var rows *sql.Rows
@@ -162,7 +162,7 @@ func (s *PostgresStore) ListNodes(ctx context.Context, tenantID *domain.ID, para
 		var tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata sql.NullString
 		var lastHeartbeat, lastConfigSync sql.NullTime
 
-		if err := rows.Scan(&n.ID, &tid, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.Status,
+		if err := rows.Scan(&n.ID, &tid, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.WireGuardIPv6, &n.Status,
 			&region, &provider, &n.SSHPort, &n.SSHUser, &sshKeyID, &binaryVersion,
 			&lastHeartbeat, &lastConfigSync, &metadata, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan node row: %w", err)
@@ -200,11 +200,11 @@ func (s *PostgresStore) UpdateNode(ctx context.Context, n *domain.Node) error {
 
 	result, err := tx.ExecContext(ctx,
 		`UPDATE nodes SET tenant_id = $1, name = $2, hostname = $3, public_ip = $4, wireguard_ip = $5,
-		 status = $6, region = $7, provider = $8, ssh_port = $9, ssh_user = $10, ssh_key_id = $11,
-		 binary_version = $12, metadata = $13, updated_at = $14
-		 WHERE id = $15`,
+		 wireguard_ipv6 = $6, status = $7, region = $8, provider = $9, ssh_port = $10, ssh_user = $11, ssh_key_id = $12,
+		 binary_version = $13, metadata = $14, updated_at = $15
+		 WHERE id = $16`,
 		nullIDString(n.TenantID), n.Name, n.Hostname, n.PublicIP,
-		nullString(&n.WireGuardIP), string(n.Status), nullString(&n.Region),
+		nullString(&n.WireGuardIP), n.WireGuardIPv6, string(n.Status), nullString(&n.Region),
 		nullString(&n.Provider), n.SSHPort, n.SSHUser, nullIDString(n.SSHKeyID),
 		nullString(&n.BinaryVersion), metadata, n.UpdatedAt, n.ID.String(),
 	)

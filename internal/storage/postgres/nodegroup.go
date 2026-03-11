@@ -148,7 +148,7 @@ func (s *PostgresStore) RemoveNodeFromGroup(ctx context.Context, groupID, nodeID
 
 func (s *PostgresStore) ListGroupNodes(ctx context.Context, groupID domain.ID) ([]*domain.Node, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT n.id, n.tenant_id, n.name, n.hostname, n.public_ip, n.wireguard_ip, n.status,
+		`SELECT n.id, n.tenant_id, n.name, n.hostname, n.public_ip, n.wireguard_ip, n.wireguard_ipv6, n.status,
 		        n.region, n.provider, n.ssh_port, n.ssh_user, n.ssh_key_id, n.binary_version,
 		        n.last_heartbeat, n.last_config_sync, n.metadata, n.created_at, n.updated_at
 		 FROM nodes n
@@ -167,7 +167,7 @@ func (s *PostgresStore) ListGroupNodes(ctx context.Context, groupID domain.ID) (
 		var tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata sql.NullString
 		var lastHeartbeat, lastConfigSync sql.NullTime
 
-		if err := rows.Scan(&n.ID, &tid, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.Status,
+		if err := rows.Scan(&n.ID, &tid, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.WireGuardIPv6, &n.Status,
 			&region, &provider, &n.SSHPort, &n.SSHUser, &sshKeyID, &binaryVersion,
 			&lastHeartbeat, &lastConfigSync, &metadata, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan group node: %w", err)

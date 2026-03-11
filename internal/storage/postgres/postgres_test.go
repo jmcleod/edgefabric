@@ -52,8 +52,9 @@ func TestMigrations_Count(t *testing.T) {
 	// SQLite has 34 migrations; PostgreSQL has 33 (no separate ALTER TABLE for
 	// last_config_sync on nodes and gateways since the column is in the CREATE TABLE).
 	// Migration 35 (index 32) adds transfer_allowed_ips for AXFR (Milestone 14).
-	if len(migrations) != 33 {
-		t.Errorf("expected 33 PostgreSQL migrations, got %d", len(migrations))
+	// Migration 34 (index 33) adds wireguard_ipv6 column for dual-stack (Milestone 16).
+	if len(migrations) != 34 {
+		t.Errorf("expected 34 PostgreSQL migrations, got %d", len(migrations))
 	}
 }
 

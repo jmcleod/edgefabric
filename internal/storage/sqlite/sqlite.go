@@ -592,4 +592,9 @@ var migrations = []Migration{
 		Description: "add transfer_allowed_ips to dns_zones",
 		SQL:         `ALTER TABLE dns_zones ADD COLUMN transfer_allowed_ips TEXT NOT NULL DEFAULT '[]'`,
 	},
+
+	{
+		Description: "add wireguard_ipv6 column to nodes",
+		SQL:         `ALTER TABLE nodes ADD COLUMN wireguard_ipv6 TEXT NOT NULL DEFAULT ''`,
+	},
 }

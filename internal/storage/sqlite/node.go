@@ -36,10 +36,10 @@ func (s *SQLiteStore) CreateNode(ctx context.Context, n *domain.Node) error {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO nodes (id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider, ssh_port, ssh_user, ssh_key_id, binary_version, metadata, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO nodes (id, tenant_id, name, hostname, public_ip, wireguard_ip, wireguard_ipv6, status, region, provider, ssh_port, ssh_user, ssh_key_id, binary_version, metadata, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		n.ID.String(), nullIDString(n.TenantID), n.Name, n.Hostname, n.PublicIP,
-		nullString(&n.WireGuardIP), string(n.Status), nullString(&n.Region),
+		nullString(&n.WireGuardIP), n.WireGuardIPv6, string(n.Status), nullString(&n.Region),
 		nullString(&n.Provider), n.SSHPort, n.SSHUser, nullIDString(n.SSHKeyID),
 		nullString(&n.BinaryVersion), metadata, n.CreatedAt, n.UpdatedAt,
 	)
@@ -70,10 +70,10 @@ func (s *SQLiteStore) GetNode(ctx context.Context, id domain.ID) (*domain.Node, 
 	var lastHeartbeat, lastConfigSync sql.NullTime
 
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
+		`SELECT id, tenant_id, name, hostname, public_ip, wireguard_ip, wireguard_ipv6, status, region, provider,
 		        ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at
 		 FROM nodes WHERE id = ?`, id.String(),
-	).Scan(&n.ID, &tenantID, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.Status,
+	).Scan(&n.ID, &tenantID, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.WireGuardIPv6, &n.Status,
 		&region, &provider, &n.SSHPort, &n.SSHUser, &sshKeyID, &binaryVersion,
 		&lastHeartbeat, &lastConfigSync, &metadata, &n.CreatedAt, &n.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -115,7 +115,7 @@ func (s *SQLiteStore) ListNodes(ctx context.Context, tenantID *domain.ID, params
 		return nil, 0, fmt.Errorf("count nodes: %w", countErr)
 	}
 
-	const selectCols = `id, tenant_id, name, hostname, public_ip, wireguard_ip, status, region, provider,
+	const selectCols = `id, tenant_id, name, hostname, public_ip, wireguard_ip, wireguard_ipv6, status, region, provider,
 			ssh_port, ssh_user, ssh_key_id, binary_version, last_heartbeat, last_config_sync, metadata, created_at, updated_at`
 
 	var rows *sql.Rows
@@ -162,7 +162,7 @@ func (s *SQLiteStore) ListNodes(ctx context.Context, tenantID *domain.ID, params
 		var tid, wgIP, region, provider, sshKeyID, binaryVersion, metadata sql.NullString
 		var lastHeartbeat, lastConfigSync sql.NullTime
 
-		if err := rows.Scan(&n.ID, &tid, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.Status,
+		if err := rows.Scan(&n.ID, &tid, &n.Name, &n.Hostname, &n.PublicIP, &wgIP, &n.WireGuardIPv6, &n.Status,
 			&region, &provider, &n.SSHPort, &n.SSHUser, &sshKeyID, &binaryVersion,
 			&lastHeartbeat, &lastConfigSync, &metadata, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan node row: %w", err)
@@ -200,11 +200,11 @@ func (s *SQLiteStore) UpdateNode(ctx context.Context, n *domain.Node) error {
 
 	result, err := tx.ExecContext(ctx,
 		`UPDATE nodes SET tenant_id = ?, name = ?, hostname = ?, public_ip = ?, wireguard_ip = ?,
-		 status = ?, region = ?, provider = ?, ssh_port = ?, ssh_user = ?, ssh_key_id = ?,
+		 wireguard_ipv6 = ?, status = ?, region = ?, provider = ?, ssh_port = ?, ssh_user = ?, ssh_key_id = ?,
 		 binary_version = ?, metadata = ?, updated_at = ?
 		 WHERE id = ?`,
 		nullIDString(n.TenantID), n.Name, n.Hostname, n.PublicIP,
-		nullString(&n.WireGuardIP), string(n.Status), nullString(&n.Region),
+		nullString(&n.WireGuardIP), n.WireGuardIPv6, string(n.Status), nullString(&n.Region),
 		nullString(&n.Provider), n.SSHPort, n.SSHUser, nullIDString(n.SSHKeyID),
 		nullString(&n.BinaryVersion), metadata, n.UpdatedAt, n.ID.String(),
 	)

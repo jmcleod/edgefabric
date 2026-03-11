@@ -125,6 +125,7 @@ func RunController(cfg *config.Config) error {
 	// Initialize networking service.
 	networkingSvc := networking.NewService(
 		store, // NodeStore
+		store, // NodeGroupStore
 		store, // WireGuardPeerStore
 		store, // BGPSessionStore
 		store, // IPAllocationStore

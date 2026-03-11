@@ -35,6 +35,7 @@ type Node struct {
 	Hostname      string           `json:"hostname" db:"hostname"`
 	PublicIP      string           `json:"public_ip" db:"public_ip"`
 	WireGuardIP   string           `json:"wireguard_ip" db:"wireguard_ip"`
+	WireGuardIPv6 string           `json:"wireguard_ipv6,omitempty" db:"wireguard_ipv6"`
 	Status        NodeStatus       `json:"status" db:"status"`
 	Region        string           `json:"region,omitempty" db:"region"`
 	Provider      string           `json:"provider,omitempty" db:"provider"`

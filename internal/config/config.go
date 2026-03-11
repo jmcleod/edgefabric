@@ -98,9 +98,12 @@ type TLSConfig struct {
 
 // WireGuardHub holds settings for the controller's WireGuard hub.
 type WireGuardHub struct {
-	ListenPort int    `yaml:"listen_port"`
-	Subnet     string `yaml:"subnet"` // e.g., "10.100.0.0/16"
-	Address    string `yaml:"address"` // controller's overlay IP, e.g., "10.100.0.1/16"
+	ListenPort  int    `yaml:"listen_port"`
+	Subnet      string `yaml:"subnet"`       // e.g., "10.100.0.0/16"
+	Address     string `yaml:"address"`      // controller's overlay IP, e.g., "10.100.0.1/16"
+	Topology    string `yaml:"topology"`     // "hub-spoke" (default) or "mesh"
+	IPv6Subnet  string `yaml:"ipv6_subnet"`  // e.g., "fd00:ef::/48"
+	IPv6Address string `yaml:"ipv6_address"` // controller's IPv6 overlay, e.g., "fd00:ef::1/48"
 }
 
 // SecretsConfig defines how secrets are encrypted at rest.

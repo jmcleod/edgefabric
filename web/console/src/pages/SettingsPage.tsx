@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStatus } from '@/hooks/useStatus';
-import { Settings, Server, Shield, Bell, Database } from 'lucide-react';
+import { Settings, Server, Shield, Bell, Database, Network } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function SettingsPage() {
@@ -75,6 +75,22 @@ export default function SettingsPage() {
               <InfoRow label="DNS Zones" value={String(raw?.dns_zone_count || 0)} />
               <InfoRow label="CDN Services" value={String(raw?.cdn_site_count || 0)} />
               <InfoRow label="Routes" value={String(raw?.route_count || 0)} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Network className="h-4 w-4" />
+                Networking
+              </CardTitle>
+              <CardDescription>Overlay network configuration</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <InfoRow label="Overlay Topology" value={raw?.overlay_topology || 'hub-spoke'} />
+              <InfoRow label="IPv4 Subnet" value={raw?.overlay_subnet || 'Not configured'} />
+              <InfoRow label="IPv6 Subnet" value={raw?.overlay_ipv6_subnet || 'Not configured'} />
+              <InfoRow label="WireGuard Port" value={String(raw?.wireguard_port || 51820)} />
             </CardContent>
           </Card>
 

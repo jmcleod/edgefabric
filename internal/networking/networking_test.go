@@ -30,7 +30,7 @@ func newTestEnv(t *testing.T) (networking.Service, *sqlite.SQLiteStore, *secrets
 		t.Fatalf("create secrets: %v", err)
 	}
 
-	svc := networking.NewService(store, store, store, store, sec, testWGConfig)
+	svc := networking.NewService(store, store, store, store, store, sec, testWGConfig)
 	return svc, store, sec
 }
 

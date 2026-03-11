@@ -155,3 +155,92 @@ func TestAllocateOverlayIPExhaustion(t *testing.T) {
 		t.Fatal("expected exhaustion error")
 	}
 }
+
+// --- IPv6 overlay IP allocation tests ---
+
+func TestAllocateOverlayIPv6(t *testing.T) {
+	subnet := "fd00:ef::/120"
+	controllerAddr := "fd00:ef::1/120"
+
+	// First allocation should get ::2 (controller has ::1).
+	ip, err := provisioning.AllocateOverlayIP(subnet, controllerAddr, nil, nil)
+	if err != nil {
+		t.Fatalf("allocate IPv6: %v", err)
+	}
+	if ip != "fd00:ef::2" {
+		t.Errorf("expected fd00:ef::2, got %s", ip)
+	}
+}
+
+func TestAllocateOverlayIPv6Sequential(t *testing.T) {
+	subnet := "fd00:ef::/120"
+	controllerAddr := "fd00:ef::1/120"
+
+	// Simulate existing peers at ::2 and ::3.
+	peers := []*domain.WireGuardPeer{
+		{AllowedIPs: []string{"fd00:ef::2/128"}},
+		{AllowedIPs: []string{"fd00:ef::3/128"}},
+	}
+
+	ip, err := provisioning.AllocateOverlayIP(subnet, controllerAddr, peers, nil)
+	if err != nil {
+		t.Fatalf("allocate IPv6: %v", err)
+	}
+	if ip != "fd00:ef::4" {
+		t.Errorf("expected fd00:ef::4, got %s", ip)
+	}
+}
+
+func TestAllocateOverlayIPv6FromNodeWireGuardIPv6(t *testing.T) {
+	subnet := "fd00:ef::/120"
+	controllerAddr := "fd00:ef::1/120"
+
+	// Node already has a WireGuard IPv6 assigned.
+	nodes := []*domain.Node{
+		{WireGuardIPv6: "fd00:ef::2"},
+	}
+
+	ip, err := provisioning.AllocateOverlayIP(subnet, controllerAddr, nil, nodes)
+	if err != nil {
+		t.Fatalf("allocate IPv6: %v", err)
+	}
+	if ip != "fd00:ef::3" {
+		t.Errorf("expected fd00:ef::3, got %s", ip)
+	}
+}
+
+func TestAllocateOverlayIPv6Exhaustion(t *testing.T) {
+	// Tiny /126 subnet: 4 addresses total.
+	// :: (network), ::1 (controller), ::2, ::3 (last).
+	subnet := "fd00:ef::/126"
+	controllerAddr := "fd00:ef::1/126"
+
+	peers := []*domain.WireGuardPeer{
+		{AllowedIPs: []string{"fd00:ef::2/128"}},
+		{AllowedIPs: []string{"fd00:ef::3/128"}},
+	}
+
+	_, err := provisioning.AllocateOverlayIP(subnet, controllerAddr, peers, nil)
+	if err == nil {
+		t.Fatal("expected exhaustion error for IPv6 subnet")
+	}
+}
+
+func TestAllocateOverlayIPv6GapFilling(t *testing.T) {
+	subnet := "fd00:ef::/120"
+	controllerAddr := "fd00:ef::1/120"
+
+	// Simulate a gap: ::2 used, ::3 free, ::4 used.
+	peers := []*domain.WireGuardPeer{
+		{AllowedIPs: []string{"fd00:ef::2/128"}},
+		{AllowedIPs: []string{"fd00:ef::4/128"}},
+	}
+
+	ip, err := provisioning.AllocateOverlayIP(subnet, controllerAddr, peers, nil)
+	if err != nil {
+		t.Fatalf("allocate IPv6: %v", err)
+	}
+	if ip != "fd00:ef::3" {
+		t.Errorf("expected fd00:ef::3 (gap fill), got %s", ip)
+	}
+}

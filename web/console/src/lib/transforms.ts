@@ -65,6 +65,7 @@ export function transformNode(api: ApiNode): Node {
     status: mapNodeStatus(api.status),
     ipv4: api.public_ip,
     ipv6: api.wireguard_ip || undefined,
+    wireGuardIPv6: api.wireguard_ipv6 || undefined,
     tenantId: api.tenant_id,
     nodeGroupId: undefined, // Not on node object directly
     lastSeen: api.last_heartbeat || api.updated_at,

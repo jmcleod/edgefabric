@@ -3,16 +3,21 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWireGuardPeers } from '@/hooks/useWireGuard';
+import { useStatus } from '@/hooks/useStatus';
 import type { WireGuardPeer } from '@/types';
 import { Shield } from 'lucide-react';
 
 export default function WireGuardPage() {
   // WireGuard peers endpoint is list-only (no CRUD), pass undefined to list all
   const { data, isLoading } = useWireGuardPeers('');
+  const { data: statusData } = useStatus();
 
   // If the hook requires ownerId, we pass empty string to list all peers
   // The backend filters by owner_id if provided
   const peers = data?.items || [];
+
+  // Topology from status endpoint (raw backend data).
+  const topology = statusData?.raw?.overlay_topology || 'hub-spoke';
 
   const columns: Column<WireGuardPeer>[] = [
     {
@@ -57,6 +62,17 @@ export default function WireGuardPage() {
         description="Overlay network peer connections"
         icon={Shield}
       />
+
+      <div className="mb-4 flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Overlay Topology:</span>
+        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+          topology === 'mesh'
+            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+            : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+        }`}>
+          {topology === 'mesh' ? 'Full Mesh' : 'Hub-Spoke'}
+        </span>
+      </div>
 
       {isLoading ? (
         <Skeleton className="h-96" />

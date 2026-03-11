@@ -31,6 +31,7 @@ export interface ApiNode {
   hostname: string;
   public_ip: string;
   wireguard_ip: string;
+  wireguard_ipv6?: string;
   status: 'pending' | 'enrolling' | 'online' | 'offline' | 'error' | 'decommissioned';
   region?: string;
   provider?: string;

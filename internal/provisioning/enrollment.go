@@ -119,6 +119,19 @@ func (p *DefaultProvisioner) CompleteEnrollment(ctx context.Context, tokenStr st
 			return nil, fmt.Errorf("allocate overlay IP: %w", err)
 		}
 
+		// Build AllowedIPs — always include IPv4 /32.
+		allowedIPs := []string{overlayIP + "/32"}
+
+		// Allocate IPv6 overlay address if configured.
+		if p.wgConfig.IPv6Subnet != "" {
+			overlayIPv6, err := AllocateOverlayIP(p.wgConfig.IPv6Subnet, p.wgConfig.IPv6Address, peers, nodes)
+			if err != nil {
+				return nil, fmt.Errorf("allocate overlay IPv6: %w", err)
+			}
+			allowedIPs = append(allowedIPs, overlayIPv6+"/128")
+			node.WireGuardIPv6 = overlayIPv6
+		}
+
 		peer := &domain.WireGuardPeer{
 			ID:           domain.NewID(),
 			OwnerType:    domain.PeerOwnerNode,
@@ -126,7 +139,7 @@ func (p *DefaultProvisioner) CompleteEnrollment(ctx context.Context, tokenStr st
 			PublicKey:     kp.PublicKey,
 			PrivateKey:    encPriv,
 			PresharedKey:  encPSK,
-			AllowedIPs:    []string{overlayIP + "/32"},
+			AllowedIPs:    allowedIPs,
 			Endpoint:      fmt.Sprintf("%s:%d", node.PublicIP, p.wgConfig.ListenPort),
 		}
 		if err := p.peers.CreateWireGuardPeer(ctx, peer); err != nil {

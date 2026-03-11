@@ -36,6 +36,7 @@ export interface Node {
   status: HealthStatus;
   ipv4: string;
   ipv6?: string;
+  wireGuardIPv6?: string;
   tenantId?: string;
   nodeGroupId?: string;
   lastSeen: string;

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"net"
 
 	"golang.org/x/crypto/curve25519"
@@ -63,14 +64,16 @@ func AllocateOverlayIP(subnet string, controllerAddr string, peers []*domain.Wir
 		return "", fmt.Errorf("parse subnet %q: %w", subnet, err)
 	}
 
+	// Dispatch to IPv6 allocator if subnet is IPv6.
+	networkIP := ipNet.IP.To4()
+	if networkIP == nil {
+		return allocateOverlayIPv6(ipNet, controllerAddr, peers, nodes)
+	}
+
 	// Build set of used IPs.
 	used := make(map[string]bool)
 
 	// Reserve network and broadcast addresses.
-	networkIP := ipNet.IP.To4()
-	if networkIP == nil {
-		return "", fmt.Errorf("only IPv4 subnets are supported")
-	}
 	used[networkIP.String()] = true
 
 	// Reserve broadcast.
@@ -139,6 +142,84 @@ func incrementIP(ip net.IP) {
 func broadcastAddr(n *net.IPNet) net.IP {
 	ip := make(net.IP, len(n.IP.To4()))
 	copy(ip, n.IP.To4())
+	for i := range ip {
+		ip[i] |= ^n.Mask[i]
+	}
+	return ip
+}
+
+// allocateOverlayIPv6 finds the next available IPv6 address in the overlay subnet.
+// It uses math/big for 128-bit address arithmetic.
+func allocateOverlayIPv6(ipNet *net.IPNet, controllerAddr string, peers []*domain.WireGuardPeer, nodes []*domain.Node) (string, error) {
+	// Build set of used IPv6 addresses.
+	used := make(map[string]bool)
+
+	// Reserve network address.
+	networkIP := ipNet.IP.To16()
+	used[networkIP.String()] = true
+
+	// Reserve controller address.
+	if controllerAddr != "" {
+		ctrlIP, _, err := net.ParseCIDR(controllerAddr)
+		if err != nil {
+			ctrlIP = net.ParseIP(controllerAddr)
+		}
+		if ctrlIP != nil {
+			used[ctrlIP.To16().String()] = true
+		}
+	}
+
+	// Collect IPs from existing WireGuard peers.
+	for _, p := range peers {
+		for _, cidr := range p.AllowedIPs {
+			ip, _, err := net.ParseCIDR(cidr)
+			if err != nil {
+				ip = net.ParseIP(cidr)
+			}
+			if ip != nil && ip.To4() == nil {
+				used[ip.To16().String()] = true
+			}
+		}
+	}
+
+	// Collect WireGuard IPv6 IPs from existing nodes.
+	for _, n := range nodes {
+		if n.WireGuardIPv6 != "" {
+			ip := net.ParseIP(n.WireGuardIPv6)
+			if ip != nil {
+				used[ip.To16().String()] = true
+			}
+		}
+	}
+
+	// Compute last address in subnet.
+	lastIP := lastIPv6Addr(ipNet)
+
+	// Iterate from network+1 to find first available.
+	current := new(big.Int).SetBytes(networkIP)
+	one := big.NewInt(1)
+	last := new(big.Int).SetBytes(lastIP)
+
+	current.Add(current, one) // Skip network address.
+	for current.Cmp(last) <= 0 {
+		b := current.Bytes()
+		// Pad to 16 bytes.
+		ip := make(net.IP, 16)
+		copy(ip[16-len(b):], b)
+
+		if !used[ip.String()] {
+			return ip.String(), nil
+		}
+		current.Add(current, one)
+	}
+
+	return "", fmt.Errorf("%w: overlay IPv6 subnet %s exhausted", storage.ErrConflict, ipNet.String())
+}
+
+// lastIPv6Addr returns the last address in an IPv6 subnet.
+func lastIPv6Addr(n *net.IPNet) net.IP {
+	ip := make(net.IP, 16)
+	copy(ip, n.IP.To16())
 	for i := range ip {
 		ip[i] |= ^n.Mask[i]
 	}
