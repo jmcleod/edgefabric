@@ -2,7 +2,6 @@ package postgres
 
 // Stub implementations for store interfaces not yet needed.
 // These satisfy the storage.Store interface contract at compile time.
-// Each will be replaced with a real implementation in its respective milestone.
 
 import (
 	"context"

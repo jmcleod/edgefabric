@@ -1,7 +1,7 @@
 # EdgeFabric
 
 [![CI](https://github.com/jmcleod/edgefabric/actions/workflows/ci.yml/badge.svg)](https://github.com/jmcleod/edgefabric/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A distributed edge networking platform that orchestrates a global fleet of nodes to deliver anycast IP services, authoritative DNS, CDN, and edge-to-private-network routing — all managed from a single control plane.
@@ -12,13 +12,17 @@ A distributed edge networking platform that orchestrates a global fleet of nodes
 - **WireGuard Mesh** — Automatic overlay network between controller, nodes, and gateways with encrypted tunnels and key management
 - **BGP Anycast** — Announce IP prefixes via BGP from globally distributed nodes for geographic load distribution
 - **Authoritative DNS** — Centrally managed DNS zones (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS, PTR) served from edge nodes
-- **CDN** — Reverse proxy with caching, TLS termination (auto/manual/disabled), compression, rate limiting, and origin health checks
-- **Route Forwarding** — TCP/UDP port forwarding through gateways into private networks
-- **Multi-tenant** — Isolated tenants with role-based access control (superuser, admin, readonly)
+- **CDN** — Reverse proxy with caching (memory + disk), TLS termination (auto/manual/disabled), gzip + brotli compression, WAF, rate limiting, and origin health checks
+- **Route Forwarding** — TCP/UDP/ICMP forwarding through gateways into private networks
+- **Multi-tenant** — Isolated tenants with role-based access control (superuser, admin, readonly) and per-tenant observability
 - **Provisioning** — SSH-based node enrollment, start/stop/restart/upgrade/decommission lifecycle
-- **Authentication** — JWT tokens, TOTP two-factor, API keys for programmatic access
+- **Authentication** — JWT tokens, TOTP two-factor, API keys for programmatic access, rate-limited auth endpoints
 - **Audit Logging** — Every state-changing operation is recorded
-- **Observability** — Structured logging, Prometheus metrics, health/readiness/liveness endpoints
+- **Observability** — Structured logging, Prometheus metrics (including per-tenant), health/readiness/liveness endpoints
+- **High Availability** — PostgreSQL backend with leader election; SQLite for single-instance deployments
+- **Notifications** — Event bus with webhook, Slack, and email notification handlers
+- **Plugin System** — Extensible plugin registry for service runtimes (BGP, DNS, CDN, Route)
+- **Kubernetes Operator** — CRDs for managing EdgeFabric resources from Kubernetes
 - **Web Console** — Embedded React SPA with real-time dashboard, fleet management, DNS/CDN configuration
 - **Single Binary** — One Go binary runs as controller, node, or gateway (SPA included)
 
@@ -71,7 +75,7 @@ docker compose down -v
 ### Build from Source
 
 ```bash
-# Prerequisites: Go 1.22+, Node.js 20+, Task (https://taskfile.dev)
+# Prerequisites: Go 1.23+, Node.js 20+, Task (https://taskfile.dev)
 go install github.com/go-task/task/v3/cmd/task@latest
 
 # Build
@@ -154,11 +158,14 @@ internal/
   secrets/                AES-256 encryption at rest
   ssh/                    SSH client for provisioning
   wireguard/              WireGuard interface management
+  ha/                     High availability (leader election)
+  plugin/                 Plugin system (extensible service registry)
   bgp/, dnsserver/, cdnserver/, routeserver/, gatewayrt/
                           Node/gateway-side service runtimes
 pkg/version/              Build-time version info
 web/console/              SPA source (React + TypeScript + Vite)
 web/static/               SPA build output (embedded at /)
+operator/                 Kubernetes operator (CRDs + reconcilers)
 deploy/docker/            Dockerfile (multi-stage alpine build)
 deploy/systemd/           Hardened systemd units
 demo/                     Docker Compose demo environment

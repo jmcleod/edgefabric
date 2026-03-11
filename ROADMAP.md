@@ -5,7 +5,7 @@
 Work proceeds in milestones. Each milestone should result in a working (if incomplete) system that builds on the previous one. Milestones are ordered by dependency — later milestones depend on earlier ones.
 
 **v1 (Milestones 0–10):** Foundation through packaging — all complete.
-**v2 (Milestones 11–17):** Monitoring, CDN enhancements, HA completion, protocol extensions, tenant metrics, advanced networking, platform extensibility.
+**v2 (Milestones 11–17):** Monitoring, CDN enhancements, HA completion, protocol extensions, tenant metrics, advanced networking, platform extensibility — all complete.
 
 ---
 
@@ -75,7 +75,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] WireGuard interface setup on node/gateway
 - [x] Hub-spoke topology: controller is hub
 - [x] Key rotation API
-- [ ] Connectivity health checks over overlay → *Milestone 11*
+- [x] Connectivity health checks over overlay *(done — `internal/networking/health.go`)*
 
 ---
 
@@ -101,7 +101,7 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] Prefix announcement management
 - [x] BGP session status reporting
 - [x] Session lifecycle (start, stop, reconfigure)
-- [ ] BGP session monitoring and alerting → *Milestone 11*
+- [x] BGP session monitoring and alerting *(done — `internal/bgp/monitor.go`)*
 
 ---
 
@@ -119,8 +119,8 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] Noop DNS service for demo/test mode
 - [x] Node DNS config, startup, and 30-second reconciliation loop
 - [x] NXDOMAIN for unknown names, REFUSED for unserved zones
-- [ ] DNS query logging → *Milestone 11*
-- [ ] Zone transfer/AXFR protocol → *Milestone 14*
+- [x] DNS query logging *(done — structured slog per query, `DNSQueryDuration` histogram, `DNSQueriesByZone` counter)*
+- [x] Zone transfer/AXFR protocol *(done — `internal/dnsserver/axfr.go`)*
 
 ---
 
@@ -130,19 +130,21 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] CDN site configuration API
 - [x] Origin management API
 - [x] Reverse proxy with httputil.ReverseProxy
-- [x] In-memory LRU response cache (disk-based deferred to v2)
+- [x] In-memory LRU response cache
 - [x] Cache key generation
 - [x] Cache TTL and invalidation
 - [x] Cache purge API
 - [x] TLS termination (auto-cert) *(done — `autocert.Manager` in `internal/app/controller.go`)*
 - [x] Origin health checks
 - [x] Header manipulation (add/set/remove)
-- [x] Compression (gzip) — brotli → *Milestone 12*
+- [x] Compression (gzip + brotli) *(done — `internal/cdnserver/proxy.go`)*
 - [x] Rate limiting per-site
 - [x] CDN config sync from controller to nodes
 - [x] Domain-based routing (Host header matching)
 - [x] Weighted origin selection
 - [x] Node-side noop CDN service for demo mode
+- [x] Disk-based response cache *(done — `internal/cdnserver/diskcache.go`)*
+- [x] WAF *(done — `internal/cdnserver/waf.go`, `waf_rules.go`)*
 
 ---
 
@@ -152,12 +154,12 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] Route CRUD API on controller
 - [x] Route config sync to nodes and gateways
 - [x] TCP/UDP proxy listener on nodes (userspace forwarding)
-- [ ] ICMP forwarding → *Milestone 14*
+- [x] ICMP forwarding *(done — `internal/routeserver/icmp.go`)*
 - [x] Packet forwarding over WireGuard to gateway
 - [x] Gateway forwarding to private destinations
 - [x] RFC1918 routing (gateway binds to WireGuard overlay IP, forwards to private destinations)
 - [x] Connection tracking / NAT for return traffic (TCP bidirectional relay, UDP session map with idle timeout)
-- [ ] Route health monitoring → *Milestone 11*
+- [x] Route health monitoring *(done — `internal/routeserver/health.go`)*
 
 ---
 
@@ -181,8 +183,8 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] Rate limiting on auth endpoints *(done — `internal/api/middleware/ratelimit.go`)*
 - [x] Key rotation with versioned key IDs *(done — `internal/crypto/crypto.go`, `internal/secrets/store.go`)*
 - [x] Webhook/Slack event handlers *(done — `internal/events/webhook_handler.go`, `slack_handler.go`)*
-- [ ] Email event handler → *Milestone 13*
-- [ ] Per-tenant usage metrics → *Milestone 15*
+- [x] Email event handler *(done — `internal/events/email_handler.go`)*
+- [x] Per-tenant usage metrics *(done — tenant-labeled Prometheus counters in `internal/observability/metrics.go`)*
 
 ---
 
@@ -197,215 +199,101 @@ Work proceeds in milestones. Each milestone should result in a working (if incom
 - [x] Developer setup guide (docs/developer-guide.md)
 - [x] Deployment / operator guide (docs/deployment-guide.md)
 - [x] README overhaul with badges and documentation hub
-- [x] Web UI (placeholder SPA)
+- [x] Web UI — full React SPA with dashboard, fleet management, DNS/CDN configuration
 - [x] GitHub Actions release workflow
-- [ ] Web UI beyond placeholder SPA *(future)*
 
 ---
 
-## Current Status
-
-**All v1 milestones (0–10) are complete.** The initial v2 implementation push delivered: PostgreSQL HA backend, rate limiting, key rotation, webhook/Slack notifications, rolling updates, TLS/ACME, CORS, and cursor-based pagination. Milestones 11–17 cover the remaining v2 work.
-
-See the [Demo](demo/README.md) for a quick start, or the [Deployment Guide](docs/deployment-guide.md) for production setup.
-
----
-
-## v2 Milestones
+## v2 Milestones — All Complete ✅
 
 ### v2 Deferred Items — Status
 
-Collected from v1 milestones. Items marked ✅ were completed in the initial v2 push; remaining items are assigned to milestones below.
+Collected from v1 milestones. All items have been completed.
 
 | Area | Item | Status |
 |------|------|--------|
-| **HA** | HA Controller (Postgres backend) | ✅ Done — `internal/storage/postgres/` (20 files) |
-| **HA** | Leader election | Milestone 13 |
-| **Networking** | WireGuard connectivity health checks | Milestone 11 |
-| **Networking** | Full mesh WireGuard | Milestone 16 |
-| **Networking** | IPv6 support | Milestone 16 |
+| **HA** | HA Controller (Postgres backend) | ✅ Done — `internal/storage/postgres/` |
+| **HA** | Leader election | ✅ Done — `internal/ha/leader.go` |
+| **Networking** | WireGuard connectivity health checks | ✅ Done — `internal/networking/health.go` |
+| **Networking** | Full mesh WireGuard | ✅ Done — `internal/networking/mesh.go` |
+| **Networking** | IPv6 support | ✅ Done — dual-stack overlay + IPv6 BGP |
 | **Provisioning** | Binary version tracking per node | ✅ Done — `domain.Node.BinaryVersion` + provisioning jobs |
 | **Provisioning** | Rolling update support | ✅ Done — backup, atomic swap, rollback in `internal/provisioning/steps.go` |
-| **BGP** | BGP session monitoring and alerting | Milestone 11 |
-| **DNS** | DNS query logging | Milestone 11 |
-| **DNS** | Zone transfer (AXFR) | Milestone 14 |
+| **BGP** | BGP session monitoring and alerting | ✅ Done — `internal/bgp/monitor.go` |
+| **DNS** | DNS query logging | ✅ Done — structured slog per query + Prometheus metrics |
+| **DNS** | Zone transfer (AXFR) | ✅ Done — `internal/dnsserver/axfr.go` |
 | **CDN** | Auto-cert TLS (ACME) | ✅ Done — `autocert.Manager` in `internal/app/controller.go` |
-| **CDN** | Brotli compression | Milestone 12 |
-| **CDN** | Disk-based response cache | Milestone 12 |
-| **CDN** | WAF | Milestone 12 |
-| **Routes** | ICMP forwarding | Milestone 14 |
-| **Routes** | Route health monitoring | Milestone 11 |
+| **CDN** | Brotli compression | ✅ Done — `internal/cdnserver/proxy.go` |
+| **CDN** | Disk-based response cache | ✅ Done — `internal/cdnserver/diskcache.go` |
+| **CDN** | WAF | ✅ Done — `internal/cdnserver/waf.go` |
+| **Routes** | ICMP forwarding | ✅ Done — `internal/routeserver/icmp.go` |
+| **Routes** | Route health monitoring | ✅ Done — `internal/routeserver/health.go` |
 | **Security** | Auth endpoint rate limiting | ✅ Done — `internal/api/middleware/ratelimit.go` |
 | **Security** | Key rotation with versioned IDs | ✅ Done — `internal/crypto/crypto.go`, `internal/secrets/store.go` |
 | **Events** | Webhook/Slack handlers | ✅ Done — `internal/events/webhook_handler.go`, `slack_handler.go` |
-| **Events** | Email handler | Milestone 13 |
-| **Metrics** | Per-tenant usage metrics | Milestone 15 |
-| **UI** | Full web dashboard | Future |
-| **Infra** | Kubernetes operator | Milestone 17 |
-| **Infra** | Plugin system | Milestone 17 |
+| **Events** | Email handler | ✅ Done — `internal/events/email_handler.go` |
+| **Metrics** | Per-tenant usage metrics | ✅ Done — tenant-labeled Prometheus counters |
+| **UI** | Full web dashboard | ✅ Done — React SPA with 30+ pages |
+| **Infra** | Kubernetes operator | ✅ Done — `operator/` (CRDs, reconcilers, REST client) |
+| **Infra** | Plugin system | ✅ Done — `internal/plugin/` (registry, types, built-in registrations) |
 
 ---
 
-### Milestone 11: Monitoring & Health Checks
+### Milestone 11: Monitoring & Health Checks ✅
 **Goal:** Active health monitoring across the overlay, BGP, DNS, and routes with event bus alerting.
 
-Complexity: **M** | Dependencies: None — can start immediately.
-
-- [ ] **11.1 WireGuard Connectivity Health Checks** [M]
-  - Periodic probe (TCP connect or ICMP) over overlay to each peer
-  - Fire `OverlayPeerUnreachable` event on consecutive failures
-  - Configurable probe interval and failure threshold
-  - **New:** `internal/networking/health.go`
-  - **Modify:** `internal/events/event.go`, `internal/app/controller.go`, `internal/config/config.go`
-
-- [ ] **11.2 BGP Session Monitoring & Alerting** [S]
-  - Poll GoBGP for session state transitions
-  - Fire `BGPSessionDown` / `BGPSessionEstablished` events via event bus
-  - Existing `GoBGPService.GetStatus()` returns peer states — just needs wiring
-  - **New:** `internal/bgp/monitor.go`
-  - **Modify:** `internal/events/event.go`, `internal/app/node.go`
-
-- [ ] **11.3 Route Health Monitoring** [M]
-  - Active TCP/UDP probe to route destinations at configurable interval
-  - Fire `RouteHealthCheckFailed` event after threshold failures
-  - Pattern: follow CDN origin `HealthChecker` in `internal/cdnserver/health.go`
-  - **New:** `internal/routeserver/health.go`
-  - **Modify:** `internal/events/event.go`, `internal/domain/route.go`
-
-- [ ] **11.4 DNS Query Logging** [S]
-  - Structured slog per query: zone, qname, qtype, rcode, latency, answer count
-  - Add `DNSQueryDuration` histogram and `DNSQueriesByZone` counter vec to metrics
-  - **Modify:** `internal/dnsserver/miekg.go`, `internal/observability/metrics.go`
+- [x] **11.1 WireGuard Connectivity Health Checks** — `internal/networking/health.go`
+- [x] **11.2 BGP Session Monitoring & Alerting** — `internal/bgp/monitor.go`
+- [x] **11.3 Route Health Monitoring** — `internal/routeserver/health.go`
+- [x] **11.4 DNS Query Logging** — structured slog + Prometheus metrics in `internal/dnsserver/miekg.go`
 
 ---
 
-### Milestone 12: CDN Enhancements
+### Milestone 12: CDN Enhancements ✅
 **Goal:** Better CDN performance with brotli compression, persistent caching, and request filtering.
 
-Complexity: **M–L** | Dependencies: None — can start immediately.
-
-- [ ] **12.1 Brotli Compression** [S]
-  - Add brotli as preferred encoding over gzip (Accept-Encoding negotiation)
-  - New `brotliResponseWriter` mirroring existing `gzipResponseWriter` pattern
-  - **Dependency:** `github.com/andybalholm/brotli`
-  - **Modify:** `internal/cdnserver/proxy.go`, `go.mod`
-
-- [ ] **12.2 Disk-Based Response Cache** [M]
-  - Hybrid cache: memory LRU (hot) + content-addressable disk storage (overflow)
-  - Extract `CacheBackend` interface from existing `Cache` struct
-  - SHA256-hashed file paths, metadata file for disk usage tracking
-  - **New:** `internal/cdnserver/diskcache.go`
-  - **Modify:** `internal/cdnserver/cache.go`, `internal/cdnserver/proxy.go`, `internal/config/config.go`
-
-- [ ] **12.3 WAF (Web Application Firewall)** [L]
-  - Rule-based request filtering: SQL injection, XSS, path traversal
-  - Two modes: `detect` (log only) and `block` (403 response)
-  - Compiled regex rule sets (OWASP-inspired patterns)
-  - **New:** `internal/cdnserver/waf.go`, `waf_rules.go`, `waf_test.go`
-  - **Modify:** `internal/cdnserver/proxy.go`, `internal/domain/cdn.go`, `internal/observability/metrics.go`
+- [x] **12.1 Brotli Compression** — `internal/cdnserver/proxy.go`
+- [x] **12.2 Disk-Based Response Cache** — `internal/cdnserver/diskcache.go`
+- [x] **12.3 WAF (Web Application Firewall)** — `internal/cdnserver/waf.go`, `waf_rules.go`
 
 ---
 
-### Milestone 13: HA & Notifications Completion
+### Milestone 13: HA & Notifications Completion ✅
 **Goal:** Complete HA with leader election; finish notification system with email.
 
-Complexity: **M** | Dependencies: PostgreSQL driver (already done).
-
-- [ ] **13.1 Leader Election via PostgreSQL Advisory Locks** [M]
-  - `pg_try_advisory_lock()` for session-scoped leader election
-  - Only leader runs background tasks (gauge updater, health checks, reconcile)
-  - `onElected` / `onDemoted` callbacks to start/stop background goroutines
-  - No-op in SQLite mode (single instance by definition)
-  - **New:** `internal/ha/leader.go`
-  - **Modify:** `internal/app/controller.go`, `internal/config/config.go`, `internal/storage/postgres/postgres.go`
-
-- [ ] **13.2 Email Notification Handler** [S]
-  - SMTP-based email handler on event bus (follows webhook/Slack handler pattern)
-  - HTML email templates via `html/template`, retry with exponential backoff
-  - Config: `notifications.email.smtp_host`, `from_addr`, `recipients`
-  - **New:** `internal/events/email_handler.go`, `email_handler_test.go`
-  - **Modify:** `internal/config/config.go`, `internal/app/controller.go`
+- [x] **13.1 Leader Election via PostgreSQL Advisory Locks** — `internal/ha/leader.go`
+- [x] **13.2 Email Notification Handler** — `internal/events/email_handler.go`
 
 ---
 
-### Milestone 14: DNS & Route Protocol Extensions
+### Milestone 14: DNS & Route Protocol Extensions ✅
 **Goal:** Zone transfer support for secondary DNS and ICMP route forwarding.
 
-Complexity: **M–L** | Dependencies: None.
-
-- [ ] **14.1 Zone Transfer (AXFR)** [M]
-  - Serve full zone transfers over TCP for secondary DNS replication
-  - ACL: configurable allowed transfer IPs
-  - Zone data already materialized in memory — AXFR is iteration of `zoneData.records`
-  - miekg/dns has built-in `dns.Transfer` support
-  - **Modify:** `internal/dnsserver/miekg.go`, `internal/config/config.go`
-
-- [ ] **14.2 ICMP Forwarding** [L]
-  - Raw socket ICMP proxy via `golang.org/x/net/icmp`
-  - Requires `CAP_NET_RAW` capability (or root)
-  - Echo ID → client mapping for return traffic (similar to UDP session map)
-  - Only ICMP echo (ping) initially; other types logged but not forwarded
-  - **New:** `internal/routeserver/icmp.go`
-  - **Modify:** `internal/routeserver/forwarder.go`
+- [x] **14.1 Zone Transfer (AXFR)** — `internal/dnsserver/axfr.go`
+- [x] **14.2 ICMP Forwarding** — `internal/routeserver/icmp.go`
 
 ---
 
-### Milestone 15: Per-Tenant Observability
+### Milestone 15: Per-Tenant Observability ✅
 **Goal:** Tenant-scoped Prometheus metrics for bandwidth, requests, queries, and forwarded bytes.
 
-Complexity: **L** | Dependencies: Milestone 11 (monitoring infrastructure).
-
-- [ ] **15.1 Per-Tenant Usage Metrics** [L]
-  - Tenant-labeled CounterVecs: `TenantHTTPRequests`, `TenantCDNBandwidth`, `TenantDNSQueries`, `TenantRouteBytesForwarded`
-  - CDN: resolve tenant from `siteRuntime.site.TenantID`
-  - DNS: resolve tenant from `zoneData.tenantID` (add field)
-  - Routes: resolve tenant from `routeRuntime.route.TenantID`
-  - API: extract tenant from auth context
-  - **Modify:** `internal/observability/metrics.go`, `internal/cdnserver/proxy.go`, `internal/dnsserver/miekg.go`, `internal/routeserver/forwarder.go`, `internal/api/middleware/metrics.go`
+- [x] **15.1 Per-Tenant Usage Metrics** — tenant-labeled CounterVecs in `internal/observability/metrics.go`, wired into CDN proxy, DNS server, route forwarder, and API middleware
 
 ---
 
-### Milestone 16: Advanced Networking
+### Milestone 16: Advanced Networking ✅
 **Goal:** Evolve overlay from hub-spoke to full mesh; add IPv6 dual-stack.
 
-Complexity: **L** | Dependencies: Soft dependency on Milestone 11 (overlay health checks for mesh monitoring).
-
-- [ ] **16.1 Full Mesh WireGuard** [L]
-  - Direct node-to-node WireGuard tunnels based on node group membership
-  - `GenerateMeshConfig(nodeID)` returns config with controller hub + all mesh peers
-  - Support mixed mode (some nodes mesh, others hub-spoke)
-  - Topology config: `wireguard.topology: "hub-spoke" | "mesh"`
-  - **New:** `internal/networking/mesh.go`
-  - **Modify:** `internal/networking/wireguard_config.go`, `internal/networking/service.go`, `internal/config/config.go`, `internal/provisioning/steps.go`
-
-- [ ] **16.2 IPv6 Support** [L]
-  - Dual-stack overlay: `fd00:ef::/48` ULA alongside `10.100.0.0/16`
-  - IPv6 BGP: add `AFI_IP6` AfiSafi to GoBGP reconcile
-  - IPv6 routing: Go's `net.Dial` handles transparently
-  - AAAA records already supported in DNS server
-  - **Modify:** `internal/networking/wireguard_config.go`, `internal/config/config.go`, `internal/bgp/gobgp.go`, `internal/provisioning/wireguard.go`
+- [x] **16.1 Full Mesh WireGuard** — `internal/networking/mesh.go`
+- [x] **16.2 IPv6 Support** — dual-stack overlay (`fd00:ef::/48` ULA + `10.100.0.0/16`), IPv6 BGP, WireGuard
 
 ---
 
-### Milestone 17: Platform Extensibility
+### Milestone 17: Platform Extensibility ✅
 **Goal:** Kubernetes CRD operator and plugin architecture for custom service runtimes.
 
-Complexity: **L** | Dependencies: Benefits from all prior milestones being stable.
-
-- [ ] **17.1 Kubernetes Operator** [L]
-  - Separate Go module in `operator/` with kubebuilder scaffolding
-  - CRDs: Tenant, Node, Gateway, DNSZone, CDNSite, Route
-  - Reconcile loops call EdgeFabric controller REST API
-  - Status subresource reflects sync state
-  - **New:** `operator/` directory tree (api, controllers, config)
-
-- [ ] **17.2 Plugin System** [L]
-  - Interface-based plugins (not Go `plugin` package — too fragile)
-  - Plugin interfaces for DNS resolver, CDN middleware, route processor
-  - Built-in implementations register at init; custom ones compiled in at build time
-  - Registry maps plugin names to implementations
-  - **New:** `internal/plugin/registry.go`, `internal/plugin/types.go`
-  - **Modify:** `internal/dnsserver/service.go`, `internal/cdnserver/service.go`, `internal/routeserver/service.go`, `internal/config/config.go`
+- [x] **17.1 Kubernetes Operator** — `operator/` (CRDs for Tenant, Node, Gateway, DNSZone, CDNSite, Route; reconcilers calling EdgeFabric REST API; status subresources)
+- [x] **17.2 Plugin System** — `internal/plugin/` (typed registry, factory functions, built-in self-registration, dynamic config validation)
 
 ---
 
@@ -413,10 +301,20 @@ Complexity: **L** | Dependencies: Benefits from all prior milestones being stabl
 
 ```
 M11 (Monitoring) ─────────┐
-M12 (CDN) ────────────────┤── all independent, can start in parallel
+M12 (CDN) ────────────────┤── all complete
 M13 (HA + Email) ─────────┤
 M14 (DNS + ICMP) ─────────┘
-M15 (Tenant Metrics) ──────── depends on M11
-M16 (Networking) ──────────── soft dep on M11 (overlay health for mesh)
-M17 (Platform) ────────────── benefits from all prior milestones stable
+M15 (Tenant Metrics) ──────── ✅
+M16 (Networking) ──────────── ✅
+M17 (Platform) ────────────── ✅
 ```
+
+## Future Work
+
+All planned milestones (0–17) are complete. Potential future directions:
+
+- **Service mesh integration** — Istio/Linkerd sidecar support for node services
+- **Multi-region controller federation** — Cross-region controller replication
+- **WebAssembly plugins** — WASM-based plugin runtime for sandboxed extensions
+- **Advanced traffic management** — Weighted routing, canary deployments, traffic splitting
+- **Terraform provider** — Infrastructure-as-code support alongside the Kubernetes operator

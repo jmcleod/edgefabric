@@ -11,7 +11,7 @@ info:
     management, CDN site and origin management with caching reverse proxy,
     route management with TCP/UDP forwarding through gateways,
     and node/gateway config sync (WireGuard, BGP, DNS, CDN, Routes).
-  version: "1.6.0"
+  version: "1.7.0"
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -2456,6 +2456,12 @@ components:
       properties:
         version:
           type: string
+        commit:
+          type: string
+          description: Git commit hash of the running build.
+        build_time:
+          type: string
+          description: Build timestamp of the running binary.
         tenant_count:
           type: integer
           description: Only included for SuperUser callers.
@@ -2468,6 +2474,38 @@ components:
           additionalProperties:
             type: integer
           description: "Map of node status to count, e.g. {\"online\": 5, \"offline\": 2}"
+        gateway_count:
+          type: integer
+        gateways_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+          description: "Map of gateway status to count, e.g. {\"online\": 3, \"offline\": 1}"
+        stale_node_count:
+          type: integer
+          description: Number of online nodes with stale config sync (>5 minutes).
+        stale_gateway_count:
+          type: integer
+          description: Number of online gateways with stale config sync (>5 minutes).
+        route_count:
+          type: integer
+        dns_zone_count:
+          type: integer
+        cdn_site_count:
+          type: integer
+        schema_version:
+          type: integer
+          description: Database schema migration version.
+        is_leader:
+          type: boolean
+          description: Whether this controller instance is the HA leader.
+        plugins:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: "Registered plugin names by type, e.g. {\"bgp\": [\"gobgp\", \"noop\"]}"
 
     ErrorResponse:
       type: object

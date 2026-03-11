@@ -75,16 +75,19 @@ Audit events include: tenant ID, user ID, action, resource, source IP, and times
 
 ## Assumptions
 
-1. **Single-instance controller**: No HA, no distributed consensus. The SQLite database is the single source of truth.
-2. **Operator protects config**: The config file contains encryption keys and must be protected by file system permissions.
-3. **Enrollment tokens are one-time**: Used during node/gateway enrollment, then marked as consumed.
-4. **WireGuard keys are generated server-side**: Private keys are encrypted at rest and transmitted over the WireGuard tunnel during enrollment.
+1. **Operator protects config**: The config file contains encryption keys and must be protected by file system permissions.
+2. **Enrollment tokens are one-time**: Used during node/gateway enrollment, then marked as consumed.
+3. **WireGuard keys are generated server-side**: Private keys are encrypted at rest and transmitted over the WireGuard tunnel during enrollment.
+
+## Implemented Security Features
+
+- **Rate limiting on auth endpoints**: Token-bucket rate limiting protects login and TOTP endpoints against brute-force attacks. Implementation: `internal/api/middleware/ratelimit.go`.
+- **Key rotation with versioned IDs**: Encryption keys support versioned key IDs, allowing seamless rotation without re-encrypting all secrets at once. Implementation: `internal/crypto/crypto.go`, `internal/secrets/store.go`.
+- **CORS**: Configurable CORS middleware for cross-origin SPA deployments. Implementation: `internal/api/middleware/cors.go`.
+- **TLS auto-renewal**: ACME/Let's Encrypt integration via `autocert.Manager` for automatic TLS certificate management. Implementation: `internal/app/controller.go`.
+- **HA controller**: PostgreSQL backend (`internal/storage/postgres/`) with leader election via PostgreSQL advisory locks (`internal/ha/leader.go`). SQLite remains the default for single-instance deployments.
 
 ## Known Limitations / Future Work
 
-- **Rate limiting on auth endpoints**: Not yet implemented. Brute-force protection relies on bcrypt cost.
-- **Key rotation**: Not supported in v1. Changing the encryption key requires re-encrypting all secrets. Planned: versioned key IDs.
-- **CORS**: Not configured. Will be needed when cross-origin SPA deployments are supported.
-- **HSTS**: Not enforced. Will be added when TLS is mandatory.
-- **Certificate auto-renewal**: TLS certificate management is manual in v1.
-- **HA controller**: PostgreSQL backend and leader election are planned for v2.
+- **HSTS**: Not enforced. Will be added when TLS is mandatory for all deployments.
+- **Mutual TLS**: Client certificate authentication for node-to-controller communication is not yet implemented.

@@ -1,8 +1,7 @@
 package sqlite
 
-// Stub implementations for store interfaces not yet needed (Milestone 3+).
+// Stub implementations for store interfaces not yet needed.
 // These satisfy the storage.Store interface contract at compile time.
-// Each will be replaced with a real implementation in its respective milestone.
 
 import (
 	"context"
@@ -26,7 +25,7 @@ import (
 
 // RouteStore is implemented in route.go.
 
-// --- TLSCertificateStore stubs (Milestone 7) ---
+// --- TLSCertificateStore stubs ---
 
 func (s *SQLiteStore) CreateTLSCertificate(ctx context.Context, c *domain.TLSCertificate) error {
 	return fmt.Errorf("TLSCertificateStore: not implemented")
