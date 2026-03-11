@@ -266,4 +266,5 @@ export interface ApiStatusResponse {
   cdn_site_count: number;
   schema_version: number;
   is_leader: boolean;
+  plugins?: Record<string, string[]>;
 }

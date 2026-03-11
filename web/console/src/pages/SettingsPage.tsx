@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStatus } from '@/hooks/useStatus';
-import { Settings, Server, Shield, Bell, Database, Network } from 'lucide-react';
+import { Settings, Server, Shield, Bell, Database, Network, Puzzle } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function SettingsPage() {
@@ -106,6 +106,22 @@ export default function SettingsPage() {
               <InfoRow label="Email Alerts" value="Not configured" />
               <InfoRow label="Webhook Alerts" value="Not configured" />
               <InfoRow label="Audit Retention" value="90 days" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Puzzle className="h-4 w-4" />
+                Plugins
+              </CardTitle>
+              <CardDescription>Registered service plugins</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <InfoRow label="BGP" value={raw?.plugins?.bgp?.join(', ') || 'none'} />
+              <InfoRow label="DNS" value={raw?.plugins?.dns?.join(', ') || 'none'} />
+              <InfoRow label="CDN" value={raw?.plugins?.cdn?.join(', ') || 'none'} />
+              <InfoRow label="Route" value={raw?.plugins?.route?.join(', ') || 'none'} />
             </CardContent>
           </Card>
         </div>

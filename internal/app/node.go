@@ -19,6 +19,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/nodeclient"
 	"github.com/jmcleod/edgefabric/internal/nodestate"
 	"github.com/jmcleod/edgefabric/internal/observability"
+	"github.com/jmcleod/edgefabric/internal/plugin"
 	"github.com/jmcleod/edgefabric/internal/route"
 	"github.com/jmcleod/edgefabric/internal/routeserver"
 )
@@ -293,44 +294,38 @@ func resolveNodeIdentity(ctx context.Context, cfg *config.Config, logger *slog.L
 	return nodeclient.New(cfg.Node.ControllerAddr, result.NodeID, result.APIToken), nil
 }
 
-// initBGPService creates the appropriate BGP service based on config mode.
+// initBGPService creates the appropriate BGP service via the plugin registry.
 func initBGPService(cfg config.BGPConfig, logger *slog.Logger) bgp.Service {
 	mode := cfg.Mode
 	if mode == "" {
 		mode = "noop"
 	}
 
-	switch mode {
-	case "gobgp":
-		logger.Info("using GoBGP BGP service")
-		return bgp.NewGoBGPService()
-	case "noop":
-		logger.Info("using noop BGP service (demo mode)")
-		return bgp.NewNoopService()
-	default:
-		logger.Error("unknown BGP mode, falling back to noop", slog.String("mode", mode))
-		return bgp.NewNoopService()
+	factory, ok := plugin.Get(plugin.PluginTypeBGP, mode)
+	if !ok {
+		logger.Error("unknown BGP plugin, falling back to noop", slog.String("mode", mode))
+		factory, _ = plugin.Get(plugin.PluginTypeBGP, "noop")
 	}
+
+	logger.Info("using BGP plugin", slog.String("mode", mode))
+	return factory.(plugin.BGPFactory)()
 }
 
-// initDNSService creates the appropriate DNS service based on config mode.
+// initDNSService creates the appropriate DNS service via the plugin registry.
 func initDNSService(cfg config.DNSConfig, logger *slog.Logger, metrics *observability.Metrics) dnsserver.Service {
 	mode := cfg.Mode
 	if mode == "" {
 		mode = "noop"
 	}
 
-	switch mode {
-	case "miekg":
-		logger.Info("using miekg/dns authoritative DNS service")
-		return dnsserver.NewMiekgService(logger, metrics, cfg.AXFREnabled)
-	case "noop":
-		logger.Info("using noop DNS service (demo mode)")
-		return dnsserver.NewNoopService()
-	default:
-		logger.Error("unknown DNS mode, falling back to noop", slog.String("mode", mode))
-		return dnsserver.NewNoopService()
+	factory, ok := plugin.Get(plugin.PluginTypeDNS, mode)
+	if !ok {
+		logger.Error("unknown DNS plugin, falling back to noop", slog.String("mode", mode))
+		factory, _ = plugin.Get(plugin.PluginTypeDNS, "noop")
 	}
+
+	logger.Info("using DNS plugin", slog.String("mode", mode))
+	return factory.(plugin.DNSFactory)(logger, metrics, cfg.AXFREnabled)
 }
 
 // bgpReconcileLoop periodically polls the controller for desired BGP state
@@ -403,36 +398,38 @@ func dnsReconcileLoop(ctx context.Context, svc dnsserver.Service, client *nodecl
 	}
 }
 
-// initCDNService creates the appropriate CDN service based on config mode.
+// initCDNService creates the appropriate CDN service via the plugin registry.
 func initCDNService(cfg config.CDNConfig, logger *slog.Logger, metrics *observability.Metrics) cdnserver.Service {
 	mode := cfg.Mode
 	if mode == "" {
 		mode = "noop"
 	}
 
-	switch mode {
-	case "proxy":
-		logger.Info("using reverse proxy CDN service")
-		svc := cdnserver.NewProxyService(logger, metrics)
-		if cfg.CacheDir != "" {
+	factory, ok := plugin.Get(plugin.PluginTypeCDN, mode)
+	if !ok {
+		logger.Error("unknown CDN plugin, falling back to noop", slog.String("mode", mode))
+		factory, _ = plugin.Get(plugin.PluginTypeCDN, "noop")
+	}
+
+	logger.Info("using CDN plugin", slog.String("mode", mode))
+	svc := factory.(plugin.CDNFactory)(logger, metrics)
+
+	// Apply CDN-specific cache configuration for the proxy implementation.
+	if mode == "proxy" && cfg.CacheDir != "" {
+		if proxySvc, ok := svc.(*cdnserver.ProxyService); ok {
 			maxBytes := cfg.CacheMaxBytes
 			if maxBytes <= 0 {
 				maxBytes = 512 * 1024 * 1024 // 512MB default
 			}
-			svc.SetCacheConfig(cfg.CacheDir, maxBytes)
+			proxySvc.SetCacheConfig(cfg.CacheDir, maxBytes)
 			logger.Info("CDN disk cache enabled",
 				slog.String("cache_dir", cfg.CacheDir),
 				slog.Int64("max_bytes", maxBytes),
 			)
 		}
-		return svc
-	case "noop":
-		logger.Info("using noop CDN service (demo mode)")
-		return cdnserver.NewNoopService()
-	default:
-		logger.Error("unknown CDN mode, falling back to noop", slog.String("mode", mode))
-		return cdnserver.NewNoopService()
 	}
+
+	return svc
 }
 
 // cdnReconcileLoop periodically polls the controller for desired CDN state
@@ -470,24 +467,21 @@ func cdnReconcileLoop(ctx context.Context, svc cdnserver.Service, client *nodecl
 	}
 }
 
-// initRouteService creates the appropriate route forwarding service based on config mode.
+// initRouteService creates the appropriate route forwarding service via the plugin registry.
 func initRouteService(cfg config.RouteConfig, logger *slog.Logger) routeserver.Service {
 	mode := cfg.Mode
 	if mode == "" {
 		mode = "noop"
 	}
 
-	switch mode {
-	case "forwarder":
-		logger.Info("using route forwarder service")
-		return routeserver.NewForwarderService(logger, nil)
-	case "noop":
-		logger.Info("using noop route service (demo mode)")
-		return routeserver.NewNoopService()
-	default:
-		logger.Error("unknown route mode, falling back to noop", slog.String("mode", mode))
-		return routeserver.NewNoopService()
+	factory, ok := plugin.Get(plugin.PluginTypeRoute, mode)
+	if !ok {
+		logger.Error("unknown route plugin, falling back to noop", slog.String("mode", mode))
+		factory, _ = plugin.Get(plugin.PluginTypeRoute, "noop")
 	}
+
+	logger.Info("using route plugin", slog.String("mode", mode))
+	return factory.(plugin.RouteFactory)(logger, nil)
 }
 
 // routeReconcileLoop periodically polls the controller for desired route state

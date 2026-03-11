@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 
+	"github.com/jmcleod/edgefabric/internal/plugin"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -299,16 +301,16 @@ func (c *Config) validateNode() error {
 		c.Node.DataDir = "/var/lib/edgefabric"
 	}
 	// Validate service mode settings.
-	if err := validateMode("node.bgp.mode", c.Node.BGP.Mode, []string{"gobgp", "noop"}); err != nil {
+	if err := validateMode("node.bgp.mode", c.Node.BGP.Mode, plugin.RegisteredNames(plugin.PluginTypeBGP)); err != nil {
 		return err
 	}
-	if err := validateMode("node.dns.mode", c.Node.DNS.Mode, []string{"miekg", "noop"}); err != nil {
+	if err := validateMode("node.dns.mode", c.Node.DNS.Mode, plugin.RegisteredNames(plugin.PluginTypeDNS)); err != nil {
 		return err
 	}
-	if err := validateMode("node.cdn.mode", c.Node.CDN.Mode, []string{"proxy", "noop"}); err != nil {
+	if err := validateMode("node.cdn.mode", c.Node.CDN.Mode, plugin.RegisteredNames(plugin.PluginTypeCDN)); err != nil {
 		return err
 	}
-	if err := validateMode("node.route.mode", c.Node.Route.Mode, []string{"forwarder", "noop"}); err != nil {
+	if err := validateMode("node.route.mode", c.Node.Route.Mode, plugin.RegisteredNames(plugin.PluginTypeRoute)); err != nil {
 		return err
 	}
 	return nil
@@ -327,7 +329,7 @@ func (c *Config) validateGateway() error {
 			return fmt.Errorf("gateway.wireguard_ip: invalid IP address: %q", c.Gateway.WireGuardIP)
 		}
 	}
-	if err := validateMode("gateway.route_mode", c.Gateway.RouteMode, []string{"forwarder", "noop"}); err != nil {
+	if err := validateMode("gateway.route_mode", c.Gateway.RouteMode, plugin.RegisteredNames(plugin.PluginTypeRoute)); err != nil {
 		return err
 	}
 	return nil

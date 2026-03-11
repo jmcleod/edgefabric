@@ -1,0 +1,81 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: cdnsites.edgefabric.io
+spec:
+  group: edgefabric.io
+  names:
+    plural: cdnsites
+    singular: cdnsite
+    kind: CDNSite
+    listKind: CDNSiteList
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - name
+                - tenantRef
+              properties:
+                name:
+                  type: string
+                tenantRef:
+                  type: string
+                domains:
+                  type: array
+                  items:
+                    type: string
+                tlsMode:
+                  type: string
+                cacheEnabled:
+                  type: boolean
+                cacheTTL:
+                  type: integer
+                compressionEnabled:
+                  type: boolean
+                rateLimitRPS:
+                  type: integer
+                wafEnabled:
+                  type: boolean
+                wafMode:
+                  type: string
+                nodeGroupRef:
+                  type: string
+                origins:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - address
+                      - scheme
+                    properties:
+                      address:
+                        type: string
+                      scheme:
+                        type: string
+                      weight:
+                        type: integer
+                      healthCheckPath:
+                        type: string
+                      healthCheckInterval:
+                        type: integer
+            status:
+              type: object
+              properties:
+                id:
+                  type: string
+                phase:
+                  type: string
+                domainCount:
+                  type: integer
+                message:
+                  type: string

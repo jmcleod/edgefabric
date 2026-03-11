@@ -11,6 +11,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/fleet"
+	"github.com/jmcleod/edgefabric/internal/plugin"
 	"github.com/jmcleod/edgefabric/internal/rbac"
 	"github.com/jmcleod/edgefabric/internal/route"
 	"github.com/jmcleod/edgefabric/internal/storage"
@@ -86,6 +87,8 @@ type statusResponse struct {
 	CDNSiteCount  int  `json:"cdn_site_count"`
 	SchemaVersion int  `json:"schema_version"`
 	IsLeader      bool `json:"is_leader"`
+
+	Plugins map[string][]string `json:"plugins,omitempty"`
 }
 
 // Status handles GET /api/v1/status — returns a fleet overview.
@@ -238,6 +241,12 @@ func (h *StatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 	// Leader status.
 	if h.isLeader != nil {
 		resp.IsLeader = h.isLeader()
+	}
+
+	// Registered plugins.
+	resp.Plugins = make(map[string][]string)
+	for _, pt := range plugin.AllPluginTypes() {
+		resp.Plugins[string(pt)] = plugin.RegisteredNames(pt)
 	}
 
 	apiutil.JSON(w, http.StatusOK, resp)
