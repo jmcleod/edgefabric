@@ -69,6 +69,12 @@ type Metrics struct {
 
 	// ICMP metrics (node + gateway, Milestone 14.2)
 	ICMPPacketsForwarded *prometheus.CounterVec // labels: {direction} direction=request|reply
+
+	// Per-tenant observability (Milestone 15)
+	TenantHTTPRequests        *prometheus.CounterVec // labels: {tenant_id, method, status}
+	TenantCDNBandwidth        *prometheus.CounterVec // labels: {tenant_id} (bytes)
+	TenantDNSQueries          *prometheus.CounterVec // labels: {tenant_id, zone}
+	TenantRouteBytesForwarded *prometheus.CounterVec // labels: {tenant_id}
 }
 
 // NewMetrics creates and registers all Prometheus metrics.
@@ -296,6 +302,40 @@ func NewMetrics() *Metrics {
 			},
 			[]string{"direction"},
 		),
+
+		// Per-tenant observability.
+		TenantHTTPRequests: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "tenant_http_requests_total",
+				Help:      "Total HTTP API requests per tenant.",
+			},
+			[]string{"tenant_id", "method", "status"},
+		),
+		TenantCDNBandwidth: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "tenant_cdn_bandwidth_bytes_total",
+				Help:      "Total CDN bandwidth served per tenant in bytes.",
+			},
+			[]string{"tenant_id"},
+		),
+		TenantDNSQueries: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "tenant_dns_queries_total",
+				Help:      "Total DNS queries served per tenant and zone.",
+			},
+			[]string{"tenant_id", "zone"},
+		),
+		TenantRouteBytesForwarded: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "tenant_route_bytes_forwarded_total",
+				Help:      "Total bytes forwarded through routes per tenant.",
+			},
+			[]string{"tenant_id"},
+		),
 	}
 
 	reg.MustRegister(
@@ -328,6 +368,10 @@ func NewMetrics() *Metrics {
 		m.AXFRTransfersTotal,
 		m.AXFRRecordsTransferred,
 		m.ICMPPacketsForwarded,
+		m.TenantHTTPRequests,
+		m.TenantCDNBandwidth,
+		m.TenantDNSQueries,
+		m.TenantRouteBytesForwarded,
 	)
 
 	return m

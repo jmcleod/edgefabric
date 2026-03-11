@@ -13,19 +13,19 @@ import (
 func (s *MiekgService) handleAXFR(w mdns.ResponseWriter, r *mdns.Msg, zd *zoneData, zoneName string, start time.Time) {
 	// Check if AXFR is globally enabled.
 	if !s.axfrEnabled {
-		s.refuseAXFR(w, r, zoneName, "disabled", start)
+		s.refuseAXFR(w, r, zoneName, zd.tenantID, "disabled", start)
 		return
 	}
 
 	// ACL check: empty ACL = deny all (secure default).
 	if len(zd.transferAllowedCIDRs) == 0 {
-		s.refuseAXFR(w, r, zoneName, "denied", start)
+		s.refuseAXFR(w, r, zoneName, zd.tenantID, "denied", start)
 		return
 	}
 
 	clientIP := extractIP(w.RemoteAddr())
 	if clientIP == nil || !isTransferAllowed(zd, clientIP) {
-		s.refuseAXFR(w, r, zoneName, "denied", start)
+		s.refuseAXFR(w, r, zoneName, zd.tenantID, "denied", start)
 		return
 	}
 
@@ -74,11 +74,11 @@ func (s *MiekgService) handleAXFR(w mdns.ResponseWriter, r *mdns.Msg, zd *zoneDa
 		)
 	}
 
-	s.recordQueryMetrics(zoneName, "AXFR", mdns.RcodeSuccess, start)
+	s.recordQueryMetrics(zoneName, zd.tenantID, "AXFR", mdns.RcodeSuccess, start)
 }
 
 // refuseAXFR sends a REFUSED response for an AXFR request.
-func (s *MiekgService) refuseAXFR(w mdns.ResponseWriter, r *mdns.Msg, zoneName, reason string, start time.Time) {
+func (s *MiekgService) refuseAXFR(w mdns.ResponseWriter, r *mdns.Msg, zoneName, tenantID, reason string, start time.Time) {
 	msg := new(mdns.Msg)
 	msg.SetReply(r)
 	msg.Rcode = mdns.RcodeRefused
@@ -87,7 +87,7 @@ func (s *MiekgService) refuseAXFR(w mdns.ResponseWriter, r *mdns.Msg, zoneName, 
 	if s.metrics != nil {
 		s.metrics.AXFRTransfersTotal.WithLabelValues(zoneName, reason).Inc()
 	}
-	s.recordQueryMetrics(zoneName, "AXFR", mdns.RcodeRefused, start)
+	s.recordQueryMetrics(zoneName, tenantID, "AXFR", mdns.RcodeRefused, start)
 }
 
 // isTransferAllowed checks if a client IP is within the zone's allowed CIDRs.

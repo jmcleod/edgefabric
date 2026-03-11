@@ -14,7 +14,7 @@ import (
 )
 
 func newTestForwarder() *ForwarderService {
-	return NewForwarderService(slog.Default())
+	return NewForwarderService(slog.Default(), nil)
 }
 
 func intPtr(v int) *int { return &v }

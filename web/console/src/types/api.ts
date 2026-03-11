@@ -241,6 +241,13 @@ export interface ApiIPAllocation {
   updated_at: string;
 }
 
+export interface ApiTenantUsage {
+  http_requests: number;
+  cdn_bandwidth_bytes: number;
+  dns_queries: number;
+  route_bytes_forwarded: number;
+}
+
 export interface ApiStatusResponse {
   version: string;
   commit: string;

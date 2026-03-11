@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { useTenant, useTenantStats, useUpdateTenant, useDeleteTenant } from '@/hooks/useTenants';
+import { useTenant, useTenantStats, useTenantUsage, useUpdateTenant, useDeleteTenant } from '@/hooks/useTenants';
 import { tenantSchema, type TenantFormData } from '@/lib/schemas';
 import { Building2, ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 
@@ -25,6 +25,7 @@ export default function TenantDetailPage() {
   const navigate = useNavigate();
   const { data: tenant, isLoading, error } = useTenant(id);
   const { data: stats } = useTenantStats(id);
+  const { data: usage } = useTenantUsage(id);
   const updateTenant = useUpdateTenant();
   const deleteTenant = useDeleteTenant();
 
@@ -119,6 +120,41 @@ export default function TenantDetailPage() {
         </Card>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-4 mt-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">HTTP Requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold mono-data">{usage ? formatNumber(usage.httpRequests) : '\u2014'}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">CDN Bandwidth</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold mono-data">{usage ? formatBytes(usage.cdnBandwidthBytes) : '\u2014'}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">DNS Queries</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold mono-data">{usage ? formatNumber(usage.dnsQueries) : '\u2014'}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Route Bytes Forwarded</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold mono-data">{usage ? formatBytes(usage.routeBytesForwarded) : '\u2014'}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Edit Dialog */}
       <FormDialog<TenantFormData>
         open={editOpen}
@@ -148,6 +184,19 @@ export default function TenantDetailPage() {
       />
     </AppLayout>
   );
+}
+
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(Math.round(n));
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(2)} MB`;
+  if (bytes >= 1_024) return `${(bytes / 1_024).toFixed(1)} KB`;
+  return `${Math.round(bytes)} B`;
 }
 
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {

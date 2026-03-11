@@ -7,9 +7,11 @@ import (
 	"testing"
 
 	mdns "github.com/miekg/dns"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/observability"
 )
 
 // getFreePort returns an available localhost port.
@@ -602,6 +604,53 @@ func TestMiekgNSRecord(t *testing.T) {
 	}
 	if len(r.Answer) != 2 {
 		t.Fatalf("expected 2 NS records, got %d", len(r.Answer))
+	}
+}
+
+func TestMiekgTenantMetrics(t *testing.T) {
+	port := getFreePort(t)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+
+	metrics := observability.NewMetrics()
+	svc := NewMiekgService(nil, metrics, false)
+	if err := svc.Start(context.Background(), addr); err != nil {
+		t.Fatalf("start server: %v", err)
+	}
+	t.Cleanup(func() { svc.Stop(context.Background()) })
+
+	tenantID := domain.NewID()
+	config := &dns.NodeDNSConfig{
+		Zones: []dns.ZoneWithRecords{
+			{
+				Zone: &domain.DNSZone{
+					ID:       domain.NewID(),
+					TenantID: tenantID,
+					Name:     "tenant.example.com.",
+					Serial:   1,
+					TTL:      300,
+					Status:   domain.DNSZoneActive,
+				},
+				Records: []*domain.DNSRecord{
+					{ID: domain.NewID(), Name: "www", Type: domain.DNSRecordTypeA, Value: "192.0.2.10"},
+				},
+			},
+		},
+	}
+
+	if err := svc.Reconcile(context.Background(), config); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	// Query the zone a few times.
+	query(t, addr, "www.tenant.example.com", mdns.TypeA)
+	query(t, addr, "www.tenant.example.com", mdns.TypeA)
+	query(t, addr, "tenant.example.com", mdns.TypeSOA)
+
+	// Verify per-tenant DNS queries counter incremented.
+	counter := metrics.TenantDNSQueries.WithLabelValues(tenantID.String(), "tenant.example.com.")
+	val := testutil.ToFloat64(counter)
+	if val < 3 {
+		t.Errorf("expected TenantDNSQueries >= 3 for tenant %s, got %v", tenantID, val)
 	}
 }
 

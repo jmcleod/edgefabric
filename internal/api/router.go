@@ -57,7 +57,12 @@ func NewRouter(svc Services) http.Handler {
 	mux := http.NewServeMux()
 
 	// Auth middleware (shared by all protected routes).
-	authMW := middleware.Auth(svc.TokenSvc, svc.AuthSvc, middleware.WithMetrics(svc.Metrics))
+	// TenantMetrics runs inside Auth so that claims are available for per-tenant counting.
+	rawAuthMW := middleware.Auth(svc.TokenSvc, svc.AuthSvc, middleware.WithMetrics(svc.Metrics))
+	tenantMetricsMW := middleware.TenantMetrics(svc.Metrics)
+	authMW := func(next http.Handler) http.Handler {
+		return rawAuthMW(tenantMetricsMW(next))
+	}
 
 	// Rate limiter for sensitive endpoints (login, enrollment, API key generation).
 	// 10 requests/second with burst of 20 per client IP.
@@ -152,6 +157,10 @@ func NewRouter(svc Services) http.Handler {
 		gatewayConfigHandler := v1.NewGatewayConfigHandler(svc.RouteSvc, svc.GatewayStore, svc.Authorizer)
 		gatewayConfigHandler.Register(mux, authMW)
 	}
+
+	// Tenant usage metrics handler.
+	tenantUsageHandler := v1.NewTenantUsageHandler(svc.Metrics, svc.Authorizer)
+	tenantUsageHandler.Register(mux, authMW)
 
 	// OpenAPI spec (unauthenticated).
 	mux.HandleFunc("GET /api/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {

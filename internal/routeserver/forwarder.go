@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/route"
 )
 
@@ -31,8 +32,9 @@ type routeRuntime struct {
 // per-route TCP/UDP listeners. Each route binds to its own EntryIP:EntryPort
 // and forwards traffic through the WireGuard overlay to the gateway.
 type ForwarderService struct {
-	mu     sync.Mutex
-	logger *slog.Logger
+	mu      sync.Mutex
+	logger  *slog.Logger
+	metrics *observability.Metrics
 
 	running bool
 	routes  map[domain.ID]*routeRuntime
@@ -47,10 +49,11 @@ type ForwarderService struct {
 }
 
 // NewForwarderService creates a new route forwarder service.
-func NewForwarderService(logger *slog.Logger) *ForwarderService {
+func NewForwarderService(logger *slog.Logger, metrics *observability.Metrics) *ForwarderService {
 	return &ForwarderService{
-		logger: logger,
-		routes: make(map[domain.ID]*routeRuntime),
+		logger:  logger,
+		metrics: metrics,
+		routes:  make(map[domain.ID]*routeRuntime),
 	}
 }
 
@@ -364,11 +367,13 @@ func (s *ForwarderService) tcpRelay(ctx context.Context, clientConn net.Conn, rt
 	go func() {
 		n, _ := io.Copy(gwConn, clientConn)
 		s.bytesForwarded.Add(uint64(n))
+		s.recordTenantBytes(rt, n)
 		done <- struct{}{}
 	}()
 	go func() {
 		n, _ := io.Copy(clientConn, gwConn)
 		s.bytesForwarded.Add(uint64(n))
+		s.recordTenantBytes(rt, n)
 		done <- struct{}{}
 	}()
 
@@ -376,6 +381,13 @@ func (s *ForwarderService) tcpRelay(ctx context.Context, clientConn net.Conn, rt
 	select {
 	case <-done:
 	case <-ctx.Done():
+	}
+}
+
+// recordTenantBytes increments the per-tenant route bytes forwarded counter.
+func (s *ForwarderService) recordTenantBytes(rt *routeRuntime, n int64) {
+	if s.metrics != nil && rt.route.TenantID.String() != "" {
+		s.metrics.TenantRouteBytesForwarded.WithLabelValues(rt.route.TenantID.String()).Add(float64(n))
 	}
 }
 
@@ -442,6 +454,7 @@ func (s *ForwarderService) udpReadLoop(ctx context.Context, conn net.PacketConn,
 
 		clientKey := clientAddr.String()
 		s.bytesForwarded.Add(uint64(n))
+		s.recordTenantBytes(rt, int64(n))
 
 		// Get or create session.
 		sessIface, loaded := sessions.Load(clientKey)
@@ -526,6 +539,7 @@ func (s *ForwarderService) udpReverseRelay(
 		}
 
 		s.bytesForwarded.Add(uint64(n))
+		s.recordTenantBytes(rt, int64(n))
 
 		if _, err := downstreamConn.WriteTo(buf[:n], clientAddr); err != nil {
 			s.logger.Debug("udp reverse relay write error",

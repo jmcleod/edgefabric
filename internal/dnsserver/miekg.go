@@ -29,6 +29,7 @@ type recordKey struct {
 // zoneData holds the in-memory representation of a DNS zone.
 type zoneData struct {
 	name                 string // FQDN zone name, e.g. "example.com."
+	tenantID             string // owning tenant ID for per-tenant metrics
 	serial               uint32
 	ttl                  uint32
 	records              map[recordKey][]mdns.RR // pre-built resource records
@@ -218,7 +219,7 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 	if len(r.Question) == 0 {
 		msg.Rcode = mdns.RcodeServerFailure
 		w.WriteMsg(msg)
-		s.recordQueryMetrics("unknown", "UNKNOWN", msg.Rcode, start)
+		s.recordQueryMetrics("unknown", "", "UNKNOWN", msg.Rcode, start)
 		return
 	}
 
@@ -234,7 +235,7 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 		msg.Rcode = mdns.RcodeRefused
 		msg.Authoritative = false
 		w.WriteMsg(msg)
-		s.recordQueryMetrics("unknown", mdns.TypeToString[q.Qtype], msg.Rcode, start)
+		s.recordQueryMetrics("unknown", "", mdns.TypeToString[q.Qtype], msg.Rcode, start)
 		return
 	}
 
@@ -251,7 +252,7 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 		soa := s.buildSOA(zd)
 		msg.Answer = append(msg.Answer, soa)
 		w.WriteMsg(msg)
-		s.recordQueryMetrics(zoneName, "SOA", msg.Rcode, start)
+		s.recordQueryMetrics(zoneName, zd.tenantID, "SOA", msg.Rcode, start)
 		return
 	}
 
@@ -277,7 +278,7 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 			msg.Answer = append(msg.Answer, ns)
 		}
 		w.WriteMsg(msg)
-		s.recordQueryMetrics(zoneName, "NS", msg.Rcode, start)
+		s.recordQueryMetrics(zoneName, zd.tenantID, "NS", msg.Rcode, start)
 		return
 	}
 
@@ -300,7 +301,7 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 			}
 			s.mu.RUnlock()
 			w.WriteMsg(msg)
-			s.recordQueryMetrics(zoneName, mdns.TypeToString[q.Qtype], msg.Rcode, start)
+			s.recordQueryMetrics(zoneName, zd.tenantID, mdns.TypeToString[q.Qtype], msg.Rcode, start)
 			return
 		}
 	}
@@ -323,11 +324,11 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 	}
 
 	w.WriteMsg(msg)
-	s.recordQueryMetrics(zoneName, mdns.TypeToString[q.Qtype], msg.Rcode, start)
+	s.recordQueryMetrics(zoneName, zd.tenantID, mdns.TypeToString[q.Qtype], msg.Rcode, start)
 }
 
 // recordQueryMetrics records per-query Prometheus metrics and structured log output.
-func (s *MiekgService) recordQueryMetrics(zone, qtype string, rcode int, start time.Time) {
+func (s *MiekgService) recordQueryMetrics(zone, tenantID, qtype string, rcode int, start time.Time) {
 	duration := time.Since(start)
 	rcodeStr := mdns.RcodeToString[rcode]
 	if rcodeStr == "" {
@@ -337,6 +338,9 @@ func (s *MiekgService) recordQueryMetrics(zone, qtype string, rcode int, start t
 	if s.metrics != nil {
 		s.metrics.DNSQueryDuration.WithLabelValues(zone, qtype, rcodeStr).Observe(duration.Seconds())
 		s.metrics.DNSQueriesByZone.WithLabelValues(zone, qtype, rcodeStr).Inc()
+		if tenantID != "" {
+			s.metrics.TenantDNSQueries.WithLabelValues(tenantID, zone).Inc()
+		}
 	}
 
 	if s.logger != nil {
@@ -400,6 +404,7 @@ func (s *MiekgService) buildZoneData(zwr dns.ZoneWithRecords) *zoneData {
 
 	zd := &zoneData{
 		name:                 zone.Name,
+		tenantID:             zone.TenantID.String(),
 		serial:               zone.Serial,
 		ttl:                  ttl,
 		records:              make(map[recordKey][]mdns.RR),

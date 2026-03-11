@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/jmcleod/edgefabric/internal/cdn"
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/observability"
 )
 
 func freePort(t *testing.T) string {
@@ -597,6 +599,71 @@ func TestProxyBrotliPreferredOverGzip(t *testing.T) {
 
 	if resp.Header.Get("Content-Encoding") != "br" {
 		t.Errorf("expected brotli preferred over gzip, got Content-Encoding: %q", resp.Header.Get("Content-Encoding"))
+	}
+}
+
+func TestProxyTenantMetrics(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "tenant response body")
+	}))
+	defer origin.Close()
+
+	metrics := observability.NewMetrics()
+	svc := NewProxyService(nil, metrics)
+	ctx := context.Background()
+
+	addr := freePort(t)
+	if err := svc.Start(ctx, addr); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer svc.Stop(ctx)
+
+	tenantID := domain.NewID()
+	siteID := domain.NewID()
+	config := &cdn.NodeCDNConfig{
+		Sites: []cdn.SiteWithOrigins{
+			{
+				Site: &domain.CDNSite{
+					ID:       siteID,
+					TenantID: tenantID,
+					Name:     "tenant-test",
+					Domains:  []string{"tenant.example.com"},
+					TLSMode:  domain.TLSModeDisabled,
+					Status:   domain.CDNSiteActive,
+				},
+				Origins: []*domain.CDNOrigin{
+					{
+						ID:      domain.NewID(),
+						SiteID:  siteID,
+						Address: origin.Listener.Addr().String(),
+						Scheme:  domain.CDNOriginHTTP,
+						Weight:  10,
+					},
+				},
+			},
+		},
+	}
+
+	if err := svc.Reconcile(ctx, config); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	req, _ := http.NewRequest("GET", "http://"+addr+"/hello", nil)
+	req.Host = "tenant.example.com"
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	// Verify tenant CDN bandwidth metric was recorded.
+	bw := testutil.ToFloat64(metrics.TenantCDNBandwidth.WithLabelValues(tenantID.String()))
+	if bw <= 0 {
+		t.Errorf("expected TenantCDNBandwidth > 0 for tenant %s, got %f", tenantID, bw)
 	}
 }
 

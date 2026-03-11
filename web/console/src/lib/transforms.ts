@@ -4,12 +4,12 @@
 import type {
   Node, Gateway, Tenant, DNSZone, DNSRecord, CDNService, CDNOrigin, Route,
   AuditLogEntry, APIKey, BGPPeer, WireGuardPeer, ProvisioningJob, NodeGroup,
-  HealthStatus, GlobalStats, User, SSHKey, IPAllocation,
+  HealthStatus, GlobalStats, User, SSHKey, IPAllocation, TenantUsage,
 } from '@/types';
 import type {
   ApiNode, ApiGateway, ApiTenant, ApiDNSZone, ApiDNSRecord, ApiCDNSite, ApiCDNOrigin,
   ApiRoute, ApiAuditEvent, ApiAPIKey, ApiBGPSession, ApiWireGuardPeer, ApiProvisioningJob,
-  ApiNodeGroup, ApiStatusResponse, ApiUser, ApiSSHKey, ApiIPAllocation,
+  ApiNodeGroup, ApiStatusResponse, ApiUser, ApiSSHKey, ApiIPAllocation, ApiTenantUsage,
 } from '@/types/api';
 
 // --- Status Mapping ---
@@ -314,6 +314,15 @@ export function transformIPAllocation(api: ApiIPAllocation): IPAllocation {
     status: api.status,
     createdAt: api.created_at,
     updatedAt: api.updated_at,
+  };
+}
+
+export function transformTenantUsage(api: ApiTenantUsage): TenantUsage {
+  return {
+    httpRequests: api.http_requests,
+    cdnBandwidthBytes: api.cdn_bandwidth_bytes,
+    dnsQueries: api.dns_queries,
+    routeBytesForwarded: api.route_bytes_forwarded,
   };
 }
 

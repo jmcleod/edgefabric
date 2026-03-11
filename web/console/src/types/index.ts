@@ -245,6 +245,13 @@ export interface GlobalStats {
   requestsBMonth: number;
 }
 
+export interface TenantUsage {
+  httpRequests: number;
+  cdnBandwidthBytes: number;
+  dnsQueries: number;
+  routeBytesForwarded: number;
+}
+
 export interface TenantStats {
   assignedNodes: number;
   healthyNodes: number;

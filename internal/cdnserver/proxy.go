@@ -280,6 +280,18 @@ func (p *ProxyService) GetStatus(_ context.Context) (*ServerStatus, error) {
 	}, nil
 }
 
+// countingWriter wraps an http.ResponseWriter and counts bytes written.
+type countingWriter struct {
+	http.ResponseWriter
+	bytesWritten int64
+}
+
+func (cw *countingWriter) Write(b []byte) (int, error) {
+	n, err := cw.ResponseWriter.Write(b)
+	cw.bytesWritten += int64(n)
+	return n, err
+}
+
 // ServeHTTP is the main request handler. It routes by Host header.
 func (p *ProxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.requestsTotal.Add(1)
@@ -299,6 +311,15 @@ func (p *ProxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no CDN site configured for this host", http.StatusBadGateway)
 		return
 	}
+
+	// Wrap writer to count bytes for per-tenant bandwidth metrics.
+	cw := &countingWriter{ResponseWriter: w}
+	w = cw
+	defer func() {
+		if p.metrics != nil && sr.site.TenantID.String() != "" {
+			p.metrics.TenantCDNBandwidth.WithLabelValues(sr.site.TenantID.String()).Add(float64(cw.bytesWritten))
+		}
+	}()
 
 	// Rate limiting.
 	if sr.rateLimiter != nil && !sr.rateLimiter.Allow() {

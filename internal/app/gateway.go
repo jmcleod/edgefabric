@@ -129,7 +129,7 @@ func initGatewayRouteService(cfg config.GatewayConfig, logger *slog.Logger) gate
 		logger.Info("using gateway route forwarder service",
 			slog.String("bind_ip", wireGuardIP),
 		)
-		return gatewayrt.NewForwarderService(wireGuardIP, logger)
+		return gatewayrt.NewForwarderService(wireGuardIP, logger, nil)
 	case "noop":
 		logger.Info("using noop gateway route service (demo mode)")
 		return gatewayrt.NewNoopService()

@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiList, apiGet } from '@/lib/api';
-import { transformTenant } from '@/lib/transforms';
+import { transformTenant, transformTenantUsage } from '@/lib/transforms';
 import { useCreateMutation, useUpdateMutation, useDeleteMutation } from './useMutations';
-import type { ApiTenant, ApiNode, ApiDNSZone, ApiCDNSite } from '@/types/api';
+import type { ApiTenant, ApiNode, ApiDNSZone, ApiCDNSite, ApiTenantUsage } from '@/types/api';
 import type { Tenant } from '@/types';
 import type { ListResult } from '@/lib/api';
 import type { TenantFormData } from '@/lib/schemas';
@@ -53,6 +53,19 @@ export function useDeleteTenant() {
       successMessage: 'Tenant deleted',
     },
   );
+}
+
+/** Fetch per-tenant usage metrics (HTTP requests, CDN bandwidth, DNS queries, route bytes). */
+export function useTenantUsage(tenantId: string | undefined) {
+  return useQuery({
+    queryKey: ['tenant-usage', tenantId],
+    queryFn: async () => {
+      const api = await apiGet<ApiTenantUsage>(`/api/v1/tenants/${tenantId}/usage`);
+      return transformTenantUsage(api);
+    },
+    enabled: !!tenantId,
+    refetchInterval: 30_000, // Refresh every 30 seconds.
+  });
 }
 
 /** Fetch per-tenant resource counts (nodes, DNS zones, CDN sites). */

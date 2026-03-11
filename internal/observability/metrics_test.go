@@ -30,6 +30,18 @@ func TestNewMetrics(t *testing.T) {
 	if m.DNSQueriesTotal == nil {
 		t.Fatal("DNSQueriesTotal is nil")
 	}
+	if m.TenantHTTPRequests == nil {
+		t.Fatal("TenantHTTPRequests is nil")
+	}
+	if m.TenantCDNBandwidth == nil {
+		t.Fatal("TenantCDNBandwidth is nil")
+	}
+	if m.TenantDNSQueries == nil {
+		t.Fatal("TenantDNSQueries is nil")
+	}
+	if m.TenantRouteBytesForwarded == nil {
+		t.Fatal("TenantRouteBytesForwarded is nil")
+	}
 
 	// Verify Handler() works.
 	handler := m.Handler()

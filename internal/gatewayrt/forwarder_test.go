@@ -27,7 +27,7 @@ func freePort(t *testing.T) int {
 }
 
 func TestGatewayForwarderStartStop(t *testing.T) {
-	svc := NewForwarderService("127.0.0.1", slog.Default())
+	svc := NewForwarderService("127.0.0.1", slog.Default(), nil)
 	ctx := context.Background()
 
 	if err := svc.Start(ctx); err != nil {
@@ -69,7 +69,7 @@ func TestGatewayForwarderTCPForward(t *testing.T) {
 	// Use a different port for the gateway listener (WireGuardIP:EntryPort).
 	listenPort := freePort(t)
 
-	svc := NewForwarderService("127.0.0.1", slog.Default())
+	svc := NewForwarderService("127.0.0.1", slog.Default(), nil)
 	ctx := context.Background()
 
 	if err := svc.Start(ctx); err != nil {
@@ -151,7 +151,7 @@ func TestGatewayForwarderUDPForward(t *testing.T) {
 
 	listenPort := freePort(t)
 
-	svc := NewForwarderService("127.0.0.1", slog.Default())
+	svc := NewForwarderService("127.0.0.1", slog.Default(), nil)
 	ctx := context.Background()
 
 	if err := svc.Start(ctx); err != nil {
@@ -208,7 +208,7 @@ func TestGatewayForwarderUDPForward(t *testing.T) {
 }
 
 func TestGatewayForwarderReconcile(t *testing.T) {
-	svc := NewForwarderService("127.0.0.1", slog.Default())
+	svc := NewForwarderService("127.0.0.1", slog.Default(), nil)
 	ctx := context.Background()
 
 	if err := svc.Start(ctx); err != nil {

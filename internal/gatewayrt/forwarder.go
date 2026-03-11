@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/route"
 )
 
@@ -32,6 +33,7 @@ type routeRuntime struct {
 type ForwarderService struct {
 	mu          sync.Mutex
 	logger      *slog.Logger
+	metrics     *observability.Metrics
 	wireGuardIP string // Gateway's overlay IP to bind listeners to.
 
 	running bool
@@ -47,9 +49,10 @@ type ForwarderService struct {
 
 // NewForwarderService creates a new gateway route forwarder.
 // wireGuardIP is the gateway's WireGuard overlay IP address.
-func NewForwarderService(wireGuardIP string, logger *slog.Logger) *ForwarderService {
+func NewForwarderService(wireGuardIP string, logger *slog.Logger, metrics *observability.Metrics) *ForwarderService {
 	return &ForwarderService{
 		logger:      logger,
+		metrics:     metrics,
 		wireGuardIP: wireGuardIP,
 		routes:      make(map[domain.ID]*routeRuntime),
 	}
@@ -344,17 +347,26 @@ func (s *ForwarderService) tcpRelay(ctx context.Context, clientConn net.Conn, rt
 	go func() {
 		n, _ := io.Copy(destConn, clientConn)
 		s.bytesForwarded.Add(uint64(n))
+		s.recordTenantBytes(rt, n)
 		done <- struct{}{}
 	}()
 	go func() {
 		n, _ := io.Copy(clientConn, destConn)
 		s.bytesForwarded.Add(uint64(n))
+		s.recordTenantBytes(rt, n)
 		done <- struct{}{}
 	}()
 
 	select {
 	case <-done:
 	case <-ctx.Done():
+	}
+}
+
+// recordTenantBytes increments the per-tenant route bytes forwarded counter.
+func (s *ForwarderService) recordTenantBytes(rt *routeRuntime, n int64) {
+	if s.metrics != nil && rt.route.TenantID.String() != "" {
+		s.metrics.TenantRouteBytesForwarded.WithLabelValues(rt.route.TenantID.String()).Add(float64(n))
 	}
 }
 
@@ -415,6 +427,7 @@ func (s *ForwarderService) udpReadLoop(ctx context.Context, conn net.PacketConn,
 
 		clientKey := clientAddr.String()
 		s.bytesForwarded.Add(uint64(n))
+		s.recordTenantBytes(rt, int64(n))
 
 		sessIface, loaded := sessions.Load(clientKey)
 		if !loaded {
@@ -492,6 +505,7 @@ func (s *ForwarderService) udpReverseRelay(
 		}
 
 		s.bytesForwarded.Add(uint64(n))
+		s.recordTenantBytes(rt, int64(n))
 
 		if _, err := downstreamConn.WriteTo(buf[:n], clientAddr); err != nil {
 			s.logger.Debug("gateway udp reverse relay write error",

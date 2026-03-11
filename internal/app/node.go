@@ -480,7 +480,7 @@ func initRouteService(cfg config.RouteConfig, logger *slog.Logger) routeserver.S
 	switch mode {
 	case "forwarder":
 		logger.Info("using route forwarder service")
-		return routeserver.NewForwarderService(logger)
+		return routeserver.NewForwarderService(logger, nil)
 	case "noop":
 		logger.Info("using noop route service (demo mode)")
 		return routeserver.NewNoopService()
