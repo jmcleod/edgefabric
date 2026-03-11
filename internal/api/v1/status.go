@@ -29,6 +29,7 @@ type StatusHandler struct {
 	routeSvc        route.Service
 	schemaVersioner storage.SchemaVersioner
 	authorizer      rbac.Authorizer
+	isLeader        func() bool
 }
 
 // NewStatusHandler creates a new status handler.
@@ -41,6 +42,7 @@ func NewStatusHandler(
 	routeSvc route.Service,
 	schemaVersioner storage.SchemaVersioner,
 	authorizer rbac.Authorizer,
+	isLeader func() bool,
 ) *StatusHandler {
 	return &StatusHandler{
 		tenantSvc:       tenantSvc,
@@ -51,6 +53,7 @@ func NewStatusHandler(
 		routeSvc:        routeSvc,
 		schemaVersioner: schemaVersioner,
 		authorizer:      authorizer,
+		isLeader:        isLeader,
 	}
 }
 
@@ -80,8 +83,9 @@ type statusResponse struct {
 
 	RouteCount    int `json:"route_count"`
 	DNSZoneCount  int `json:"dns_zone_count"`
-	CDNSiteCount  int `json:"cdn_site_count"`
-	SchemaVersion int `json:"schema_version"`
+	CDNSiteCount  int  `json:"cdn_site_count"`
+	SchemaVersion int  `json:"schema_version"`
+	IsLeader      bool `json:"is_leader"`
 }
 
 // Status handles GET /api/v1/status — returns a fleet overview.
@@ -229,6 +233,11 @@ func (h *StatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 		} else {
 			resp.SchemaVersion = sv
 		}
+	}
+
+	// Leader status.
+	if h.isLeader != nil {
+		resp.IsLeader = h.isLeader()
 	}
 
 	apiutil.JSON(w, http.StatusOK, resp)

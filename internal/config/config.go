@@ -30,14 +30,21 @@ type Config struct {
 
 // ControllerConfig holds controller-specific settings.
 type ControllerConfig struct {
-	ListenAddr     string              `yaml:"listen_addr"`
-	ExternalURL    string              `yaml:"external_url"`
-	Storage        StorageConfig       `yaml:"storage"`
-	TLS            TLSConfig           `yaml:"tls,omitempty"`
-	CORS           CORSConfig          `yaml:"cors,omitempty"`
-	Notifications  NotificationsConfig `yaml:"notifications,omitempty"`
-	WireGuard      WireGuardHub        `yaml:"wireguard"`
-	Secrets        SecretsConfig       `yaml:"secrets"`
+	ListenAddr     string                `yaml:"listen_addr"`
+	ExternalURL    string                `yaml:"external_url"`
+	Storage        StorageConfig         `yaml:"storage"`
+	TLS            TLSConfig             `yaml:"tls,omitempty"`
+	CORS           CORSConfig            `yaml:"cors,omitempty"`
+	Notifications  NotificationsConfig   `yaml:"notifications,omitempty"`
+	LeaderElection LeaderElectionConfig  `yaml:"leader_election,omitempty"`
+	WireGuard      WireGuardHub          `yaml:"wireguard"`
+	Secrets        SecretsConfig         `yaml:"secrets"`
+}
+
+// LeaderElectionConfig holds HA leader election settings.
+type LeaderElectionConfig struct {
+	Enabled  bool   `yaml:"enabled,omitempty"`  // Enable leader election (auto-enabled for postgres).
+	Interval string `yaml:"interval,omitempty"` // Lock check interval (default "5s").
 }
 
 // CORSConfig holds Cross-Origin Resource Sharing settings.
@@ -45,10 +52,22 @@ type CORSConfig struct {
 	AllowedOrigins []string `yaml:"allowed_origins,omitempty"` // e.g., ["https://console.example.com"]
 }
 
-// NotificationsConfig holds webhook and Slack notification settings.
+// NotificationsConfig holds webhook, Slack, and email notification settings.
 type NotificationsConfig struct {
 	Webhooks []WebhookEndpoint `yaml:"webhooks,omitempty"`
 	Slack    SlackNotification `yaml:"slack,omitempty"`
+	Email    EmailNotification `yaml:"email,omitempty"`
+}
+
+// EmailNotification defines SMTP email notification settings.
+type EmailNotification struct {
+	SMTPHost   string   `yaml:"smtp_host,omitempty"`
+	SMTPPort   int      `yaml:"smtp_port,omitempty"`    // Default 587.
+	Username   string   `yaml:"username,omitempty"`
+	Password   string   `yaml:"password,omitempty"`
+	FromAddr   string   `yaml:"from_addr,omitempty"`
+	Recipients []string `yaml:"recipients,omitempty"`
+	UseTLS     bool     `yaml:"use_tls,omitempty"`
 }
 
 // WebhookEndpoint defines a single webhook notification target.

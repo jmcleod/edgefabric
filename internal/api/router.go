@@ -49,6 +49,7 @@ type Services struct {
 	StaticFS        fs.FS // Embedded SPA files (web.StaticFiles)
 	CORSOrigins     []string // Allowed CORS origins (empty = same-origin only).
 	TLSEnabled      bool     // When true, HSTS headers are set.
+	IsLeader        func() bool // HA leader status check.
 }
 
 // NewRouter assembles the full HTTP handler with all middleware and routes.
@@ -83,7 +84,7 @@ func NewRouter(svc Services) http.Handler {
 		nodeGroupHandler := v1.NewNodeGroupHandler(svc.FleetSvc, svc.Authorizer, svc.AuditLog)
 		nodeGroupHandler.Register(mux, authMW)
 
-		statusHandler := v1.NewStatusHandler(svc.TenantSvc, svc.UserSvc, svc.FleetSvc, svc.DNSSvc, svc.CDNSvc, svc.RouteSvc, svc.SchemaVersioner, svc.Authorizer)
+		statusHandler := v1.NewStatusHandler(svc.TenantSvc, svc.UserSvc, svc.FleetSvc, svc.DNSSvc, svc.CDNSvc, svc.RouteSvc, svc.SchemaVersioner, svc.Authorizer, svc.IsLeader)
 		statusHandler.Register(mux, authMW)
 	}
 

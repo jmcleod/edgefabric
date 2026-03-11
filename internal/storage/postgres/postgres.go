@@ -48,6 +48,12 @@ func New(dsn string) (*PostgresStore, error) {
 	return &PostgresStore{db: db}, nil
 }
 
+// DB returns the underlying *sql.DB for use by the leader elector.
+// Advisory locks require a dedicated connection from the same pool.
+func (s *PostgresStore) DB() *sql.DB {
+	return s.db
+}
+
 // Close closes the database connection pool.
 func (s *PostgresStore) Close() error {
 	return s.db.Close()

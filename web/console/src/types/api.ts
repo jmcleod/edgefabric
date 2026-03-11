@@ -256,4 +256,5 @@ export interface ApiStatusResponse {
   dns_zone_count: number;
   cdn_site_count: number;
   schema_version: number;
+  is_leader: boolean;
 }

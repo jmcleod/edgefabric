@@ -21,6 +21,7 @@ import (
 	"github.com/jmcleod/edgefabric/internal/domain"
 	"github.com/jmcleod/edgefabric/internal/events"
 	"github.com/jmcleod/edgefabric/internal/fleet"
+	"github.com/jmcleod/edgefabric/internal/ha"
 	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/observability"
 	"github.com/jmcleod/edgefabric/internal/provisioning"
@@ -170,24 +171,60 @@ func RunController(cfg *config.Config) error {
 	}
 	logger.Info("controller wireguard peer bootstrapped")
 
-	// Start system gauge updater (refreshes active node/gateway/tenant counts every 15s).
-	gaugeCtx, gaugeCancel := context.WithCancel(context.Background())
-	defer gaugeCancel()
-	observability.StartGaugeUpdater(gaugeCtx, metrics, 15*time.Second, func(m *observability.Metrics) {
-		_, nodeCount, err := fleetSvc.ListNodes(context.Background(), nil, storage.ListParams{Limit: 1})
-		if err == nil {
-			m.ActiveNodes.Set(float64(nodeCount))
+	// Set up leader election with gauge updater in onElected/onDemoted callbacks.
+	var gaugeCancel context.CancelFunc
+	startGauges := func() {
+		var gaugeCtx context.Context
+		gaugeCtx, gaugeCancel = context.WithCancel(context.Background())
+		metrics.LeaderStatus.Set(1)
+		observability.StartGaugeUpdater(gaugeCtx, metrics, 15*time.Second, func(m *observability.Metrics) {
+			_, nodeCount, err := fleetSvc.ListNodes(context.Background(), nil, storage.ListParams{Limit: 1})
+			if err == nil {
+				m.ActiveNodes.Set(float64(nodeCount))
+			}
+			_, tCount, err := tenantSvc.List(context.Background(), storage.ListParams{Limit: 1})
+			if err == nil {
+				m.ActiveTenants.Set(float64(tCount))
+			}
+			_, gatewayTotal, err := fleetSvc.ListGateways(context.Background(), nil, storage.ListParams{Limit: 1})
+			if err == nil {
+				m.ActiveGateways.Set(float64(gatewayTotal))
+			}
+		})
+		logger.Info("leader: started background gauge updater")
+	}
+	stopGauges := func() {
+		metrics.LeaderStatus.Set(0)
+		if gaugeCancel != nil {
+			gaugeCancel()
+			gaugeCancel = nil
 		}
-		_, tCount, err := tenantSvc.List(context.Background(), storage.ListParams{Limit: 1})
-		if err == nil {
-			m.ActiveTenants.Set(float64(tCount))
+		logger.Info("leader: stopped background gauge updater")
+	}
+
+	// Create leader elector based on storage driver.
+	var elector ha.LeaderElector
+	if cfg.Controller.Storage.Driver == "postgres" {
+		pgStore := store.(*postgres.PostgresStore)
+		var opts []ha.Option
+		if cfg.Controller.LeaderElection.Interval != "" {
+			if d, err := time.ParseDuration(cfg.Controller.LeaderElection.Interval); err == nil {
+				opts = append(opts, ha.WithElectionInterval(d))
+			}
 		}
-		// Gateway count (nil tenant = all gateways).
-		_, gatewayTotal, err := fleetSvc.ListGateways(context.Background(), nil, storage.ListParams{Limit: 1})
-		if err == nil {
-			m.ActiveGateways.Set(float64(gatewayTotal))
+		elector = ha.NewPostgresLeaderElector(pgStore.DB(), logger, eventBus, startGauges, stopGauges, opts...)
+	} else {
+		elector = ha.NewNoopLeaderElector(startGauges, stopGauges)
+	}
+
+	// Start leader election in the background.
+	electionCtx, electionCancel := context.WithCancel(context.Background())
+	defer electionCancel()
+	go func() {
+		if err := elector.Start(electionCtx); err != nil {
+			logger.Error("leader election error", slog.String("error", err.Error()))
 		}
-	})
+	}()
 
 	// Assemble API router.
 	tlsEnabled := cfg.Controller.TLS.Enabled
@@ -215,6 +252,7 @@ func RunController(cfg *config.Config) error {
 		StaticFS:        web.StaticFiles,
 		CORSOrigins:     cfg.Controller.CORS.AllowedOrigins,
 		TLSEnabled:      tlsEnabled,
+		IsLeader:        elector.IsLeader,
 	})
 
 	srv := &http.Server{
@@ -349,6 +387,8 @@ var allEventTypes = []events.EventType{
 	events.BGPSessionEstablished,
 	events.RouteHealthCheckFailed,
 	events.RouteHealthCheckRecovered,
+	events.LeaderElected,
+	events.LeaderLost,
 }
 
 // registerNotificationHandlers wires webhook and Slack handlers onto the event
@@ -380,5 +420,24 @@ func registerNotificationHandlers(bus *events.Bus, cfg config.NotificationsConfi
 			bus.Subscribe(et, handler)
 		}
 		logger.Info("slack notification handler registered")
+	}
+
+	if cfg.Email.SMTPHost != "" && len(cfg.Email.Recipients) > 0 {
+		handler := events.NewEmailHandler(logger, events.EmailConfig{
+			SMTPHost:   cfg.Email.SMTPHost,
+			SMTPPort:   cfg.Email.SMTPPort,
+			Username:   cfg.Email.Username,
+			Password:   cfg.Email.Password,
+			FromAddr:   cfg.Email.FromAddr,
+			Recipients: cfg.Email.Recipients,
+			UseTLS:     cfg.Email.UseTLS,
+		})
+		for _, et := range allEventTypes {
+			bus.Subscribe(et, handler)
+		}
+		logger.Info("email notification handler registered",
+			slog.String("from", cfg.Email.FromAddr),
+			slog.Int("recipients", len(cfg.Email.Recipients)),
+		)
 	}
 }

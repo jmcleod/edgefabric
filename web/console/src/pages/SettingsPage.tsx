@@ -35,9 +35,12 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <InfoRow label="Version" value={raw?.version || 'unknown'} />
-              <InfoRow label="Uptime" value={raw?.uptime || 'unknown'} />
-              <InfoRow label="Database" value={raw?.database_status || 'unknown'} />
-              <InfoRow label="Go Version" value={raw?.go_version || 'unknown'} />
+              <InfoRow label="Commit" value={raw?.commit ? raw.commit.substring(0, 8) : 'unknown'} />
+              <InfoRow label="Schema Version" value={String(raw?.schema_version || 0)} />
+              <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
+                <span className="text-sm text-muted-foreground">Leader Status</span>
+                <StatusBadge status={raw?.is_leader ? 'leader' : 'follower'} size="sm" />
+              </div>
             </CardContent>
           </Card>
 
@@ -66,10 +69,12 @@ export default function SettingsPage() {
               <CardDescription>Resource summary</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <InfoRow label="Total Nodes" value={String(raw?.total_nodes || 0)} />
-              <InfoRow label="Total Tenants" value={String(raw?.total_tenants || 0)} />
-              <InfoRow label="DNS Zones" value={String(raw?.total_zones || 0)} />
-              <InfoRow label="CDN Services" value={String(raw?.total_cdn_services || 0)} />
+              <InfoRow label="Total Nodes" value={String(raw?.node_count || 0)} />
+              <InfoRow label="Total Gateways" value={String(raw?.gateway_count || 0)} />
+              <InfoRow label="Total Tenants" value={String(raw?.tenant_count || 0)} />
+              <InfoRow label="DNS Zones" value={String(raw?.dns_zone_count || 0)} />
+              <InfoRow label="CDN Services" value={String(raw?.cdn_site_count || 0)} />
+              <InfoRow label="Routes" value={String(raw?.route_count || 0)} />
             </CardContent>
           </Card>
 

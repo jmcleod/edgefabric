@@ -23,6 +23,10 @@ const (
 	BGPSessionEstablished     EventType = "bgp.session_established"
 	RouteHealthCheckFailed    EventType = "route.health_check_failed"
 	RouteHealthCheckRecovered EventType = "route.health_check_recovered"
+
+	// HA leader election events (Milestone 13).
+	LeaderElected EventType = "leader.elected"
+	LeaderLost    EventType = "leader.lost"
 )
 
 // Severity indicates how urgent an event is.

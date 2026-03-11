@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 import type { HealthStatus } from '@/types';
 
 interface StatusBadgeProps {
-  status: HealthStatus | 'active' | 'suspended' | 'pending' | 'established' | 'idle' | 'connect';
+  status: HealthStatus | 'active' | 'suspended' | 'pending' | 'established' | 'idle' | 'connect' | 'leader' | 'follower';
   size?: 'sm' | 'md';
   showDot?: boolean;
 }
@@ -19,6 +19,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   established: { label: 'Established', className: 'status-healthy' },
   idle: { label: 'Idle', className: 'status-warning' },
   connect: { label: 'Connecting', className: 'status-syncing' },
+  leader: { label: 'Leader', className: 'status-healthy' },
+  follower: { label: 'Follower', className: 'status-warning' },
 };
 
 export function StatusBadge({ status, size = 'md', showDot = true }: StatusBadgeProps) {

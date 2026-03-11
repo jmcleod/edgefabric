@@ -59,6 +59,9 @@ type Metrics struct {
 	// WAF metrics (node-side, Milestone 12.3)
 	WAFMatchesTotal      *prometheus.CounterVec // labels: {category, action}
 	WAFRequestsInspected prometheus.Counter
+
+	// HA leader election (controller-side, Milestone 13.1)
+	LeaderStatus prometheus.Gauge
 }
 
 // NewMetrics creates and registers all Prometheus metrics.
@@ -255,6 +258,12 @@ func NewMetrics() *Metrics {
 			Name:      "waf_requests_inspected_total",
 			Help:      "Total requests inspected by WAF.",
 		}),
+
+		LeaderStatus: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: "edgefabric",
+			Name:      "leader_status",
+			Help:      "Whether this controller instance is the leader (1=leader, 0=follower).",
+		}),
 	}
 
 	reg.MustRegister(
@@ -283,6 +292,7 @@ func NewMetrics() *Metrics {
 		m.OverlayPeerHealthy,
 		m.WAFMatchesTotal,
 		m.WAFRequestsInspected,
+		m.LeaderStatus,
 	)
 
 	return m
