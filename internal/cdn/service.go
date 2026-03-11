@@ -46,6 +46,8 @@ type CreateSiteRequest struct {
 	RateLimitRPS       *int             `json:"rate_limit_rps,omitempty"`
 	NodeGroupID        *domain.ID       `json:"node_group_id,omitempty"`
 	HeaderRules        json.RawMessage  `json:"header_rules,omitempty"`
+	WAFEnabled         bool             `json:"waf_enabled"`
+	WAFMode            string           `json:"waf_mode,omitempty"`
 }
 
 // UpdateSiteRequest is the input for updating a CDN site.
@@ -59,6 +61,8 @@ type UpdateSiteRequest struct {
 	RateLimitRPS       *int               `json:"rate_limit_rps,omitempty"`
 	NodeGroupID        *domain.ID         `json:"node_group_id,omitempty"`
 	HeaderRules        json.RawMessage    `json:"header_rules,omitempty"`
+	WAFEnabled         *bool              `json:"waf_enabled,omitempty"`
+	WAFMode            *string            `json:"waf_mode,omitempty"`
 	Status             *domain.CDNSiteStatus `json:"status,omitempty"`
 	// ClearNodeGroup explicitly removes the node group assignment when true.
 	ClearNodeGroup bool `json:"clear_node_group,omitempty"`

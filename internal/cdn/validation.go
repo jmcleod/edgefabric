@@ -48,6 +48,10 @@ func validateSite(site *domain.CDNSite) error {
 		}
 	}
 
+	if err := validateWAFMode(site.WAFMode); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -82,6 +86,10 @@ func validateSiteUpdate(site *domain.CDNSite) error {
 		if err := validateHeaderRules(site.HeaderRules); err != nil {
 			return fmt.Errorf("invalid header_rules: %w", err)
 		}
+	}
+
+	if err := validateWAFMode(site.WAFMode); err != nil {
+		return err
 	}
 
 	return nil
@@ -183,5 +191,15 @@ func validateOriginScheme(scheme domain.CDNOriginScheme) error {
 		return fmt.Errorf("origin scheme is required")
 	default:
 		return fmt.Errorf("invalid origin scheme: %q (must be http or https)", scheme)
+	}
+}
+
+// validateWAFMode validates the WAF mode setting.
+func validateWAFMode(mode string) error {
+	switch mode {
+	case "detect", "block", "":
+		return nil
+	default:
+		return fmt.Errorf("invalid waf_mode: %q (must be detect, block, or empty)", mode)
 	}
 }

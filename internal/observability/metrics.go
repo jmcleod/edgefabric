@@ -55,6 +55,10 @@ type Metrics struct {
 	// Overlay health monitoring (node-side, Milestone 11.1)
 	OverlayHealthChecksTotal *prometheus.CounterVec // labels: {peer, result}
 	OverlayPeerHealthy       *prometheus.GaugeVec   // labels: {peer}
+
+	// WAF metrics (node-side, Milestone 12.3)
+	WAFMatchesTotal      *prometheus.CounterVec // labels: {category, action}
+	WAFRequestsInspected prometheus.Counter
 }
 
 // NewMetrics creates and registers all Prometheus metrics.
@@ -236,6 +240,21 @@ func NewMetrics() *Metrics {
 			},
 			[]string{"peer"},
 		),
+
+		// WAF metrics.
+		WAFMatchesTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "waf_matches_total",
+				Help:      "Total WAF rule matches by category and action.",
+			},
+			[]string{"category", "action"},
+		),
+		WAFRequestsInspected: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "edgefabric",
+			Name:      "waf_requests_inspected_total",
+			Help:      "Total requests inspected by WAF.",
+		}),
 	}
 
 	reg.MustRegister(
@@ -262,6 +281,8 @@ func NewMetrics() *Metrics {
 		m.RouteHealthy,
 		m.OverlayHealthChecksTotal,
 		m.OverlayPeerHealthy,
+		m.WAFMatchesTotal,
+		m.WAFRequestsInspected,
 	)
 
 	return m

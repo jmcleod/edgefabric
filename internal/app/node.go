@@ -124,7 +124,7 @@ func RunNode(cfg *config.Config) error {
 	// Initialize CDN service if enabled.
 	var cdnSvc cdnserver.Service
 	if cfg.Node.CDN.Enabled {
-		cdnSvc = initCDNService(cfg.Node.CDN, logger)
+		cdnSvc = initCDNService(cfg.Node.CDN, logger, metrics)
 		if cdnSvc != nil {
 			listenAddr := cfg.Node.CDN.ListenAddr
 			if listenAddr == "" {
@@ -404,7 +404,7 @@ func dnsReconcileLoop(ctx context.Context, svc dnsserver.Service, client *nodecl
 }
 
 // initCDNService creates the appropriate CDN service based on config mode.
-func initCDNService(cfg config.CDNConfig, logger *slog.Logger) cdnserver.Service {
+func initCDNService(cfg config.CDNConfig, logger *slog.Logger, metrics *observability.Metrics) cdnserver.Service {
 	mode := cfg.Mode
 	if mode == "" {
 		mode = "noop"
@@ -413,7 +413,19 @@ func initCDNService(cfg config.CDNConfig, logger *slog.Logger) cdnserver.Service
 	switch mode {
 	case "proxy":
 		logger.Info("using reverse proxy CDN service")
-		return cdnserver.NewProxyService(logger)
+		svc := cdnserver.NewProxyService(logger, metrics)
+		if cfg.CacheDir != "" {
+			maxBytes := cfg.CacheMaxBytes
+			if maxBytes <= 0 {
+				maxBytes = 512 * 1024 * 1024 // 512MB default
+			}
+			svc.SetCacheConfig(cfg.CacheDir, maxBytes)
+			logger.Info("CDN disk cache enabled",
+				slog.String("cache_dir", cfg.CacheDir),
+				slog.Int64("max_bytes", maxBytes),
+			)
+		}
+		return svc
 	case "noop":
 		logger.Info("using noop CDN service (demo mode)")
 		return cdnserver.NewNoopService()

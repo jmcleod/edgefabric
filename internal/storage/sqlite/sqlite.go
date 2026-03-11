@@ -577,4 +577,14 @@ var migrations = []Migration{
 		Description: "add last_config_sync column to gateways",
 		SQL:         `ALTER TABLE gateways ADD COLUMN last_config_sync DATETIME`,
 	},
+
+	{
+		Description: "add waf_enabled to cdn_sites",
+		SQL:         `ALTER TABLE cdn_sites ADD COLUMN waf_enabled INTEGER NOT NULL DEFAULT 0`,
+	},
+
+	{
+		Description: "add waf_mode to cdn_sites",
+		SQL:         `ALTER TABLE cdn_sites ADD COLUMN waf_mode TEXT NOT NULL DEFAULT 'detect'`,
+	},
 }

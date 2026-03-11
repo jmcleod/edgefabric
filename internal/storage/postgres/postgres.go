@@ -553,4 +553,14 @@ var migrations = []Migration{
 		Description: "create provisioning_jobs node+status index",
 		SQL:         `CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_node_status ON provisioning_jobs(node_id, status)`,
 	},
+
+	{
+		Description: "add waf_enabled to cdn_sites",
+		SQL:         `ALTER TABLE cdn_sites ADD COLUMN IF NOT EXISTS waf_enabled BOOLEAN NOT NULL DEFAULT FALSE`,
+	},
+
+	{
+		Description: "add waf_mode to cdn_sites",
+		SQL:         `ALTER TABLE cdn_sites ADD COLUMN IF NOT EXISTS waf_mode TEXT NOT NULL DEFAULT 'detect'`,
+	},
 }

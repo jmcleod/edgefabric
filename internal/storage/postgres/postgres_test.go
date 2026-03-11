@@ -51,8 +51,8 @@ func TestMigrations_Count(t *testing.T) {
 	// migrations that are folded into the initial CREATE TABLE in PostgreSQL).
 	// SQLite has 32 migrations; PostgreSQL has 30 (no separate ALTER TABLE for
 	// last_config_sync on nodes and gateways since the column is in the CREATE TABLE).
-	if len(migrations) != 30 {
-		t.Errorf("expected 30 PostgreSQL migrations, got %d", len(migrations))
+	if len(migrations) != 32 {
+		t.Errorf("expected 32 PostgreSQL migrations, got %d", len(migrations))
 	}
 }
 

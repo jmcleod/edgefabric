@@ -46,6 +46,8 @@ func (s *DefaultService) CreateSite(ctx context.Context, req CreateSiteRequest) 
 		RateLimitRPS:       req.RateLimitRPS,
 		NodeGroupID:        req.NodeGroupID,
 		HeaderRules:        req.HeaderRules,
+		WAFEnabled:         req.WAFEnabled,
+		WAFMode:            req.WAFMode,
 	}
 
 	if err := validateSite(site); err != nil {
@@ -102,6 +104,12 @@ func (s *DefaultService) UpdateSite(ctx context.Context, id domain.ID, req Updat
 	}
 	if req.HeaderRules != nil {
 		site.HeaderRules = req.HeaderRules
+	}
+	if req.WAFEnabled != nil {
+		site.WAFEnabled = *req.WAFEnabled
+	}
+	if req.WAFMode != nil {
+		site.WAFMode = *req.WAFMode
 	}
 	if req.Status != nil {
 		site.Status = *req.Status

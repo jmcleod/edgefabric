@@ -45,12 +45,13 @@ func (s *SQLiteStore) CreateCDNSite(ctx context.Context, site *domain.CDNSite) e
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO cdn_sites (id, tenant_id, name, tls_mode, tls_cert_id, cache_enabled, cache_ttl, compression_enabled, rate_limit_rps, node_group_id, header_rules, status, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO cdn_sites (id, tenant_id, name, tls_mode, tls_cert_id, cache_enabled, cache_ttl, compression_enabled, rate_limit_rps, node_group_id, header_rules, waf_enabled, waf_mode, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		site.ID.String(), site.TenantID.String(), site.Name,
 		string(site.TLSMode), tlsCertID,
 		site.CacheEnabled, site.CacheTTL, site.CompressionEnabled,
 		site.RateLimitRPS, nodeGroupID, headerRules,
+		site.WAFEnabled, site.WAFMode,
 		string(site.Status), site.CreatedAt, site.UpdatedAt,
 	)
 	if err != nil {
@@ -80,13 +81,14 @@ func (s *SQLiteStore) GetCDNSite(ctx context.Context, id domain.ID) (*domain.CDN
 
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id, tenant_id, name, tls_mode, tls_cert_id, cache_enabled, cache_ttl,
-		        compression_enabled, rate_limit_rps, node_group_id, header_rules, status,
-		        created_at, updated_at
+		        compression_enabled, rate_limit_rps, node_group_id, header_rules,
+		        waf_enabled, waf_mode, status, created_at, updated_at
 		 FROM cdn_sites WHERE id = ?`, id.String(),
 	).Scan(&site.ID, &site.TenantID, &site.Name,
 		&site.TLSMode, &site.TLSCertID,
 		&site.CacheEnabled, &site.CacheTTL, &site.CompressionEnabled,
 		&site.RateLimitRPS, &site.NodeGroupID, &headerRules,
+		&site.WAFEnabled, &site.WAFMode,
 		&site.Status, &site.CreatedAt, &site.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, storage.ErrNotFound
@@ -124,8 +126,8 @@ func (s *SQLiteStore) ListCDNSites(ctx context.Context, tenantID domain.ID, para
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, tenant_id, name, tls_mode, tls_cert_id, cache_enabled, cache_ttl,
-		        compression_enabled, rate_limit_rps, node_group_id, header_rules, status,
-		        created_at, updated_at
+		        compression_enabled, rate_limit_rps, node_group_id, header_rules,
+		        waf_enabled, waf_mode, status, created_at, updated_at
 		 FROM cdn_sites WHERE tenant_id = ? ORDER BY name ASC LIMIT ? OFFSET ?`,
 		tenantID.String(), params.Limit, params.Offset,
 	)
@@ -142,6 +144,7 @@ func (s *SQLiteStore) ListCDNSites(ctx context.Context, tenantID domain.ID, para
 			&site.TLSMode, &site.TLSCertID,
 			&site.CacheEnabled, &site.CacheTTL, &site.CompressionEnabled,
 			&site.RateLimitRPS, &site.NodeGroupID, &headerRules,
+			&site.WAFEnabled, &site.WAFMode,
 			&site.Status, &site.CreatedAt, &site.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan cdn site: %w", err)
 		}
@@ -194,11 +197,12 @@ func (s *SQLiteStore) UpdateCDNSite(ctx context.Context, site *domain.CDNSite) e
 	result, err := tx.ExecContext(ctx,
 		`UPDATE cdn_sites SET name = ?, tls_mode = ?, tls_cert_id = ?, cache_enabled = ?,
 		 cache_ttl = ?, compression_enabled = ?, rate_limit_rps = ?, node_group_id = ?,
-		 header_rules = ?, status = ?, updated_at = ?
+		 header_rules = ?, waf_enabled = ?, waf_mode = ?, status = ?, updated_at = ?
 		 WHERE id = ?`,
 		site.Name, string(site.TLSMode), tlsCertID,
 		site.CacheEnabled, site.CacheTTL, site.CompressionEnabled,
 		site.RateLimitRPS, nodeGroupID, headerRules,
+		site.WAFEnabled, site.WAFMode,
 		string(site.Status), site.UpdatedAt, site.ID.String(),
 	)
 	if err != nil {

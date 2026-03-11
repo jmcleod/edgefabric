@@ -37,13 +37,15 @@ func (s *PostgresStore) CreateCDNSite(ctx context.Context, site *domain.CDNSite)
 
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO cdn_sites (id, tenant_id, name, tls_mode, tls_cert_id, cache_enabled, cache_ttl,
-		 compression_enabled, rate_limit_rps, node_group_id, header_rules, status, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		 compression_enabled, rate_limit_rps, node_group_id, header_rules, waf_enabled, waf_mode,
+		 status, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
 		site.ID.String(), site.TenantID.String(), site.Name, string(site.TLSMode),
 		nullIDString(site.TLSCertID), site.CacheEnabled, site.CacheTTL,
 		site.CompressionEnabled, nullIntPtr(site.RateLimitRPS),
-		nullIDString(site.NodeGroupID), headerRules, string(site.Status),
-		site.CreatedAt, site.UpdatedAt,
+		nullIDString(site.NodeGroupID), headerRules,
+		site.WAFEnabled, site.WAFMode,
+		string(site.Status), site.CreatedAt, site.UpdatedAt,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -72,11 +74,14 @@ func (s *PostgresStore) GetCDNSite(ctx context.Context, id domain.ID) (*domain.C
 
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id, tenant_id, name, tls_mode, tls_cert_id, cache_enabled, cache_ttl,
-		        compression_enabled, rate_limit_rps, node_group_id, header_rules, status, created_at, updated_at
+		        compression_enabled, rate_limit_rps, node_group_id, header_rules,
+		        waf_enabled, waf_mode, status, created_at, updated_at
 		 FROM cdn_sites WHERE id = $1`, id.String(),
 	).Scan(&site.ID, &site.TenantID, &site.Name, &site.TLSMode, &tlsCertID,
 		&site.CacheEnabled, &site.CacheTTL, &site.CompressionEnabled, &rateLimitRPS,
-		&nodeGroupID, &headerRules, &site.Status, &site.CreatedAt, &site.UpdatedAt)
+		&nodeGroupID, &headerRules,
+		&site.WAFEnabled, &site.WAFMode,
+		&site.Status, &site.CreatedAt, &site.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
@@ -128,7 +133,8 @@ func (s *PostgresStore) ListCDNSites(ctx context.Context, tenantID domain.ID, pa
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, tenant_id, name, tls_mode, tls_cert_id, cache_enabled, cache_ttl,
-		        compression_enabled, rate_limit_rps, node_group_id, header_rules, status, created_at, updated_at
+		        compression_enabled, rate_limit_rps, node_group_id, header_rules,
+		        waf_enabled, waf_mode, status, created_at, updated_at
 		 FROM cdn_sites WHERE tenant_id = $1 ORDER BY name ASC LIMIT $2 OFFSET $3`,
 		tenantID.String(), params.Limit, params.Offset,
 	)
@@ -145,7 +151,9 @@ func (s *PostgresStore) ListCDNSites(ctx context.Context, tenantID domain.ID, pa
 
 		if err := rows.Scan(&site.ID, &site.TenantID, &site.Name, &site.TLSMode, &tlsCertID,
 			&site.CacheEnabled, &site.CacheTTL, &site.CompressionEnabled, &rateLimitRPS,
-			&nodeGroupID, &headerRules, &site.Status, &site.CreatedAt, &site.UpdatedAt); err != nil {
+			&nodeGroupID, &headerRules,
+			&site.WAFEnabled, &site.WAFMode,
+			&site.Status, &site.CreatedAt, &site.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan cdn site: %w", err)
 		}
 
@@ -197,12 +205,13 @@ func (s *PostgresStore) UpdateCDNSite(ctx context.Context, site *domain.CDNSite)
 	result, err := tx.ExecContext(ctx,
 		`UPDATE cdn_sites SET name = $1, tls_mode = $2, tls_cert_id = $3, cache_enabled = $4, cache_ttl = $5,
 		 compression_enabled = $6, rate_limit_rps = $7, node_group_id = $8, header_rules = $9,
-		 status = $10, updated_at = $11
-		 WHERE id = $12`,
+		 waf_enabled = $10, waf_mode = $11, status = $12, updated_at = $13
+		 WHERE id = $14`,
 		site.Name, string(site.TLSMode), nullIDString(site.TLSCertID),
 		site.CacheEnabled, site.CacheTTL, site.CompressionEnabled,
 		nullIntPtr(site.RateLimitRPS), nullIDString(site.NodeGroupID),
-		headerRules, string(site.Status), site.UpdatedAt, site.ID.String(),
+		headerRules, site.WAFEnabled, site.WAFMode,
+		string(site.Status), site.UpdatedAt, site.ID.String(),
 	)
 	if err != nil {
 		return fmt.Errorf("update cdn site: %w", err)

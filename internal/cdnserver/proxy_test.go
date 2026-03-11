@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/jmcleod/edgefabric/internal/cdn"
 	"github.com/jmcleod/edgefabric/internal/domain"
 )
@@ -29,7 +30,7 @@ func freePort(t *testing.T) string {
 }
 
 func TestProxyStartStop(t *testing.T) {
-	svc := NewProxyService(nil)
+	svc := NewProxyService(nil, nil)
 	ctx := context.Background()
 
 	addr := freePort(t)
@@ -69,7 +70,7 @@ func TestProxyServeHTTP(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	svc := NewProxyService(nil)
+	svc := NewProxyService(nil, nil)
 	ctx := context.Background()
 
 	addr := freePort(t)
@@ -140,7 +141,7 @@ func TestProxyCacheHitMiss(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	svc := NewProxyService(nil)
+	svc := NewProxyService(nil, nil)
 	ctx := context.Background()
 
 	addr := freePort(t)
@@ -225,7 +226,7 @@ func TestProxyRateLimit(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	svc := NewProxyService(nil)
+	svc := NewProxyService(nil, nil)
 	ctx := context.Background()
 
 	addr := freePort(t)
@@ -295,7 +296,7 @@ func TestProxyHeaderRules(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	svc := NewProxyService(nil)
+	svc := NewProxyService(nil, nil)
 	ctx := context.Background()
 
 	addr := freePort(t)
@@ -365,7 +366,7 @@ func TestProxyCompression(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	svc := NewProxyService(nil)
+	svc := NewProxyService(nil, nil)
 	ctx := context.Background()
 
 	addr := freePort(t)
@@ -439,7 +440,7 @@ func TestProxyCompression(t *testing.T) {
 }
 
 func TestProxyUnknownHost(t *testing.T) {
-	svc := NewProxyService(nil)
+	svc := NewProxyService(nil, nil)
 	ctx := context.Background()
 
 	addr := freePort(t)
@@ -462,8 +463,145 @@ func TestProxyUnknownHost(t *testing.T) {
 	}
 }
 
+func TestProxyBrotliCompression(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, strings.Repeat("hello world ", 100))
+	}))
+	defer origin.Close()
+
+	svc := NewProxyService(nil, nil)
+	ctx := context.Background()
+
+	addr := freePort(t)
+	if err := svc.Start(ctx, addr); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer svc.Stop(ctx)
+
+	siteID := domain.NewID()
+	config := &cdn.NodeCDNConfig{
+		Sites: []cdn.SiteWithOrigins{
+			{
+				Site: &domain.CDNSite{
+					ID:                 siteID,
+					Name:               "brotli-test",
+					Domains:            []string{"brotli.example.com"},
+					TLSMode:            domain.TLSModeDisabled,
+					CompressionEnabled: true,
+					Status:             domain.CDNSiteActive,
+				},
+				Origins: []*domain.CDNOrigin{
+					{
+						ID:      domain.NewID(),
+						SiteID:  siteID,
+						Address: origin.Listener.Addr().String(),
+						Scheme:  domain.CDNOriginHTTP,
+						Weight:  10,
+					},
+				},
+			},
+		},
+	}
+
+	if err := svc.Reconcile(ctx, config); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{DisableCompression: true},
+	}
+
+	req, _ := http.NewRequest("GET", "http://"+addr+"/test", nil)
+	req.Host = "brotli.example.com"
+	req.Header.Set("Accept-Encoding", "br")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.Header.Get("Content-Encoding") != "br" {
+		t.Errorf("expected Content-Encoding: br, got %q", resp.Header.Get("Content-Encoding"))
+	}
+
+	body, _ := io.ReadAll(brotli.NewReader(resp.Body))
+	expected := strings.Repeat("hello world ", 100)
+	if string(body) != expected {
+		t.Errorf("decompressed body length %d, expected %d", len(body), len(expected))
+	}
+}
+
+func TestProxyBrotliPreferredOverGzip(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, strings.Repeat("hello world ", 100))
+	}))
+	defer origin.Close()
+
+	svc := NewProxyService(nil, nil)
+	ctx := context.Background()
+
+	addr := freePort(t)
+	if err := svc.Start(ctx, addr); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer svc.Stop(ctx)
+
+	siteID := domain.NewID()
+	config := &cdn.NodeCDNConfig{
+		Sites: []cdn.SiteWithOrigins{
+			{
+				Site: &domain.CDNSite{
+					ID:                 siteID,
+					Name:               "prefer-test",
+					Domains:            []string{"prefer.example.com"},
+					TLSMode:            domain.TLSModeDisabled,
+					CompressionEnabled: true,
+					Status:             domain.CDNSiteActive,
+				},
+				Origins: []*domain.CDNOrigin{
+					{
+						ID:      domain.NewID(),
+						SiteID:  siteID,
+						Address: origin.Listener.Addr().String(),
+						Scheme:  domain.CDNOriginHTTP,
+						Weight:  10,
+					},
+				},
+			},
+		},
+	}
+
+	if err := svc.Reconcile(ctx, config); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{DisableCompression: true},
+	}
+
+	// Send both gzip and br — brotli should win.
+	req, _ := http.NewRequest("GET", "http://"+addr+"/test", nil)
+	req.Host = "prefer.example.com"
+	req.Header.Set("Accept-Encoding", "gzip, br")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.Header.Get("Content-Encoding") != "br" {
+		t.Errorf("expected brotli preferred over gzip, got Content-Encoding: %q", resp.Header.Get("Content-Encoding"))
+	}
+}
+
 func TestProxyGetStatus(t *testing.T) {
-	svc := NewProxyService(nil)
+	svc := NewProxyService(nil, nil)
 	ctx := context.Background()
 
 	addr := freePort(t)

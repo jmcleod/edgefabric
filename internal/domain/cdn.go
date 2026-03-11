@@ -53,6 +53,8 @@ type CDNSite struct {
 	RateLimitRPS       *int            `json:"rate_limit_rps,omitempty" db:"rate_limit_rps"`
 	NodeGroupID        *ID             `json:"node_group_id,omitempty" db:"node_group_id"`
 	HeaderRules        json.RawMessage `json:"header_rules,omitempty" db:"header_rules"`
+	WAFEnabled         bool            `json:"waf_enabled" db:"waf_enabled"`
+	WAFMode            string          `json:"waf_mode,omitempty" db:"waf_mode"`
 	Status             CDNSiteStatus   `json:"status" db:"status"`
 	CreatedAt          time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at" db:"updated_at"`

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net"
+	"path/filepath"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -18,8 +19,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/jmcleod/edgefabric/internal/cdn"
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/observability"
 )
 
 // Ensure ProxyService implements Service at compile time.
@@ -29,10 +32,11 @@ var _ Service = (*ProxyService)(nil)
 type siteRuntime struct {
 	site          *domain.CDNSite
 	origins       []*domain.CDNOrigin
-	cache         *Cache
+	cache         CacheBackend
 	rateLimiter   *RateLimiter
 	healthChecker *HealthChecker
 	headerRules   []cdn.HeaderRule
+	waf           *WAF
 }
 
 // ProxyService implements the CDN reverse proxy server.
@@ -47,14 +51,22 @@ type ProxyService struct {
 	sites    map[string]*siteRuntime // domain → runtime
 	siteByID map[domain.ID]*siteRuntime
 
-	// Metrics.
+	// Disk cache configuration.
+	cacheDir      string // Base directory for disk cache. Empty = memory only.
+	cacheMaxBytes int64  // Max disk cache bytes per site.
+
+	// Prometheus metrics (optional).
+	metrics *observability.Metrics
+
+	// Internal counters.
 	requestsTotal atomic.Uint64
 	cacheHits     atomic.Uint64
 	cacheMisses   atomic.Uint64
 }
 
 // NewProxyService creates a new CDN reverse proxy service.
-func NewProxyService(logger *slog.Logger) *ProxyService {
+// The metrics parameter is optional and may be nil.
+func NewProxyService(logger *slog.Logger, metrics *observability.Metrics) *ProxyService {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -62,7 +74,15 @@ func NewProxyService(logger *slog.Logger) *ProxyService {
 		sites:    make(map[string]*siteRuntime),
 		siteByID: make(map[domain.ID]*siteRuntime),
 		logger:   logger,
+		metrics:  metrics,
 	}
+}
+
+// SetCacheConfig configures disk-based caching. When set, the proxy creates
+// HybridCache instances (memory + disk) instead of memory-only caches.
+func (p *ProxyService) SetCacheConfig(dir string, maxBytes int64) {
+	p.cacheDir = dir
+	p.cacheMaxBytes = maxBytes
 }
 
 func (p *ProxyService) Start(_ context.Context, listenAddr string) error {
@@ -153,7 +173,20 @@ func (p *ProxyService) Reconcile(_ context.Context, config *cdn.NodeCDNConfig) e
 
 			// Set up cache.
 			if swo.Site.CacheEnabled {
-				sr.cache = NewCache(10000)
+				if p.cacheDir != "" {
+					hc, err := NewHybridCache(10000, filepath.Join(p.cacheDir, swo.Site.ID.String()), p.cacheMaxBytes, p.logger)
+					if err != nil {
+						p.logger.Warn("disk cache init failed, falling back to memory",
+							slog.String("site", swo.Site.Name),
+							slog.String("error", err.Error()),
+						)
+						sr.cache = NewCache(10000)
+					} else {
+						sr.cache = hc
+					}
+				} else {
+					sr.cache = NewCache(10000)
+				}
 			}
 
 			// Set up rate limiter.
@@ -167,6 +200,15 @@ func (p *ProxyService) Reconcile(_ context.Context, config *cdn.NodeCDNConfig) e
 				if err := json.Unmarshal(swo.Site.HeaderRules, &rules); err == nil {
 					sr.headerRules = rules
 				}
+			}
+
+			// Set up WAF if enabled.
+			if swo.Site.WAFEnabled {
+				mode := WAFModeDetect
+				if swo.Site.WAFMode == "block" {
+					mode = WAFModeBlock
+				}
+				sr.waf = NewWAF(mode, DefaultRules(), p.logger, p.metrics)
 			}
 
 			// Set up health checker.
@@ -264,6 +306,30 @@ func (p *ProxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// WAF inspection.
+	if sr.waf != nil {
+		if match := sr.waf.Inspect(r); match != nil {
+			action := "logged"
+			if sr.waf.mode == WAFModeBlock {
+				action = "blocked"
+			}
+			p.logger.Warn("WAF match",
+				slog.String("rule", match.Rule.ID),
+				slog.String("category", string(match.Rule.Category)),
+				slog.String("field", match.Field),
+				slog.String("action", action),
+				slog.String("host", host),
+			)
+			if p.metrics != nil {
+				p.metrics.WAFMatchesTotal.WithLabelValues(string(match.Rule.Category), action).Inc()
+			}
+			if sr.waf.mode == WAFModeBlock {
+				http.Error(w, "request blocked by WAF", http.StatusForbidden)
+				return
+			}
+		}
+	}
+
 	// Cache check (GET only).
 	if r.Method == http.MethodGet && sr.cache != nil {
 		key := CacheKey(r.Method, host, r.URL.Path, r.URL.RawQuery)
@@ -321,13 +387,22 @@ func (p *ProxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// Check if we should compress the response.
-	if sr.site.CompressionEnabled && acceptsGzip(r) {
-		gzw := &gzipResponseWriter{ResponseWriter: w, buf: &bytes.Buffer{}}
-		w.Header().Set("X-Cache", "MISS")
-		proxy.ServeHTTP(gzw, r)
-		gzw.flush()
-		return
+	// Check if we should compress the response (brotli preferred over gzip).
+	if sr.site.CompressionEnabled {
+		if acceptsBrotli(r) {
+			brw := &brotliResponseWriter{ResponseWriter: w, buf: &bytes.Buffer{}}
+			w.Header().Set("X-Cache", "MISS")
+			proxy.ServeHTTP(brw, r)
+			brw.flush()
+			return
+		}
+		if acceptsGzip(r) {
+			gzw := &gzipResponseWriter{ResponseWriter: w, buf: &bytes.Buffer{}}
+			w.Header().Set("X-Cache", "MISS")
+			proxy.ServeHTTP(gzw, r)
+			gzw.flush()
+			return
+		}
 	}
 
 	w.Header().Set("X-Cache", "MISS")
@@ -409,6 +484,12 @@ func applyHeaderRules(resp *http.Response, rules []cdn.HeaderRule) {
 	}
 }
 
+// acceptsBrotli checks if the client accepts brotli encoding.
+func acceptsBrotli(r *http.Request) bool {
+	ae := r.Header.Get("Accept-Encoding")
+	return strings.Contains(ae, "br")
+}
+
 // acceptsGzip checks if the client accepts gzip encoding.
 func acceptsGzip(r *http.Request) bool {
 	ae := r.Header.Get("Accept-Encoding")
@@ -460,6 +541,48 @@ func (g *gzipResponseWriter) flush() {
 	g.ResponseWriter.Header().Del("Content-Length")
 	g.ResponseWriter.WriteHeader(g.statusCode)
 	g.ResponseWriter.Write(compressed.Bytes()) //nolint:errcheck
+}
+
+// brotliResponseWriter buffers the response and compresses it with brotli.
+type brotliResponseWriter struct {
+	http.ResponseWriter
+	buf        *bytes.Buffer
+	statusCode int
+}
+
+func (b *brotliResponseWriter) WriteHeader(code int) {
+	b.statusCode = code
+}
+
+func (b *brotliResponseWriter) Write(data []byte) (int, error) {
+	return b.buf.Write(data)
+}
+
+func (b *brotliResponseWriter) flush() {
+	if b.statusCode == 0 {
+		b.statusCode = http.StatusOK
+	}
+
+	ct := b.ResponseWriter.Header().Get("Content-Type")
+	if !shouldCompress(ct) || b.buf.Len() == 0 {
+		b.ResponseWriter.WriteHeader(b.statusCode)
+		b.ResponseWriter.Write(b.buf.Bytes()) //nolint:errcheck
+		return
+	}
+
+	var compressed bytes.Buffer
+	bw := brotli.NewWriterLevel(&compressed, brotli.DefaultCompression)
+	if _, err := bw.Write(b.buf.Bytes()); err != nil {
+		b.ResponseWriter.WriteHeader(b.statusCode)
+		b.ResponseWriter.Write(b.buf.Bytes()) //nolint:errcheck
+		return
+	}
+	bw.Close()
+
+	b.ResponseWriter.Header().Set("Content-Encoding", "br")
+	b.ResponseWriter.Header().Del("Content-Length")
+	b.ResponseWriter.WriteHeader(b.statusCode)
+	b.ResponseWriter.Write(compressed.Bytes()) //nolint:errcheck
 }
 
 // shouldCompress returns true for text-like content types.

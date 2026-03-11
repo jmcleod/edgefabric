@@ -28,6 +28,18 @@ func (e *cacheEntry) expired() bool {
 	return time.Since(e.storedAt) > e.ttl
 }
 
+// CacheBackend is the interface for cache storage implementations.
+type CacheBackend interface {
+	Get(key string) (*cacheEntry, bool)
+	Put(key string, body []byte, statusCode int, headers http.Header, ttl time.Duration)
+	Purge()
+	Len() int
+	Stats() (hits, misses uint64)
+}
+
+// Ensure Cache implements CacheBackend at compile time.
+var _ CacheBackend = (*Cache)(nil)
+
 // Cache is an in-memory LRU cache for HTTP responses.
 type Cache struct {
 	mu         sync.RWMutex
@@ -36,6 +48,7 @@ type Cache struct {
 	head, tail *cacheEntry // Doubly-linked list: head = most recent, tail = least recent.
 	hits       uint64
 	misses     uint64
+	OnEvict    func(entry *cacheEntry) // Called when an entry is evicted due to capacity.
 }
 
 // NewCache creates a new LRU cache with the given max entries.
@@ -205,7 +218,11 @@ func (c *Cache) evictTail() {
 	if c.tail == nil {
 		return
 	}
-	c.removeEntry(c.tail)
+	evicted := c.tail
+	c.removeEntry(evicted)
+	if c.OnEvict != nil {
+		c.OnEvict(evicted)
+	}
 }
 
 // shouldSkipCache checks if Cache-Control directives prohibit caching.

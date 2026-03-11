@@ -128,9 +128,11 @@ type DNSConfig struct {
 
 // CDNConfig holds CDN runtime settings for a node.
 type CDNConfig struct {
-	Enabled    bool   `yaml:"enabled"`
-	ListenAddr string `yaml:"listen_addr,omitempty"` // Default ":8080"
-	Mode       string `yaml:"mode,omitempty"`        // "proxy" or "noop", defaults to "noop"
+	Enabled       bool   `yaml:"enabled"`
+	ListenAddr    string `yaml:"listen_addr,omitempty"`       // Default ":8080"
+	Mode          string `yaml:"mode,omitempty"`              // "proxy" or "noop", defaults to "noop"
+	CacheDir      string `yaml:"cache_dir,omitempty"`         // Directory for disk cache. Empty = memory only.
+	CacheMaxBytes int64  `yaml:"cache_max_bytes,omitempty"`   // Max disk cache bytes per site. Default 512MB.
 }
 
 // RouteConfig holds route forwarding runtime settings for a node.
