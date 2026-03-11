@@ -39,6 +39,22 @@ type Metrics struct {
 
 	// Auth metrics
 	AuthFailuresTotal *prometheus.CounterVec // labels: {type} = login, totp, api_key
+
+	// DNS query monitoring (node-side, Milestone 11.4)
+	DNSQueryDuration  *prometheus.HistogramVec // labels: {zone, qtype, rcode}
+	DNSQueriesByZone  *prometheus.CounterVec   // labels: {zone, qtype, rcode}
+
+	// BGP session monitoring (node-side, Milestone 11.2)
+	BGPSessionState           *prometheus.GaugeVec   // labels: {peer_address, peer_asn}
+	BGPSessionTransitionsTotal *prometheus.CounterVec // labels: {peer_address, transition}
+
+	// Route health monitoring (node-side, Milestone 11.3)
+	RouteHealthChecksTotal *prometheus.CounterVec   // labels: {route_id, route_name, result}
+	RouteHealthy           *prometheus.GaugeVec     // labels: {route_id, route_name}
+
+	// Overlay health monitoring (node-side, Milestone 11.1)
+	OverlayHealthChecksTotal *prometheus.CounterVec // labels: {peer, result}
+	OverlayPeerHealthy       *prometheus.GaugeVec   // labels: {peer}
 }
 
 // NewMetrics creates and registers all Prometheus metrics.
@@ -147,6 +163,79 @@ func NewMetrics() *Metrics {
 			},
 			[]string{"type"},
 		),
+
+		// DNS query monitoring.
+		DNSQueryDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: "edgefabric",
+				Name:      "dns_query_duration_seconds",
+				Help:      "DNS query processing duration in seconds.",
+				Buckets:   []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5},
+			},
+			[]string{"zone", "qtype", "rcode"},
+		),
+		DNSQueriesByZone: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "dns_queries_by_zone_total",
+				Help:      "Total DNS queries by zone, query type, and response code.",
+			},
+			[]string{"zone", "qtype", "rcode"},
+		),
+
+		// BGP session monitoring.
+		BGPSessionState: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "edgefabric",
+				Name:      "bgp_session_state",
+				Help:      "BGP session state (1=established, 0=not established).",
+			},
+			[]string{"peer_address", "peer_asn"},
+		),
+		BGPSessionTransitionsTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "bgp_session_transitions_total",
+				Help:      "Total BGP session state transitions.",
+			},
+			[]string{"peer_address", "transition"},
+		),
+
+		// Route health monitoring.
+		RouteHealthChecksTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "route_health_checks_total",
+				Help:      "Total route health check probes by result.",
+			},
+			[]string{"route_id", "route_name", "result"},
+		),
+		RouteHealthy: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "edgefabric",
+				Name:      "route_healthy",
+				Help:      "Route health status (1=healthy, 0=unhealthy).",
+			},
+			[]string{"route_id", "route_name"},
+		),
+
+		// Overlay health monitoring.
+		OverlayHealthChecksTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "edgefabric",
+				Name:      "overlay_health_checks_total",
+				Help:      "Total overlay peer health check probes by result.",
+			},
+			[]string{"peer", "result"},
+		),
+		OverlayPeerHealthy: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "edgefabric",
+				Name:      "overlay_peer_healthy",
+				Help:      "Overlay peer health status (1=healthy, 0=unhealthy).",
+			},
+			[]string{"peer"},
+		),
 	}
 
 	reg.MustRegister(
@@ -165,6 +254,14 @@ func NewMetrics() *Metrics {
 		m.DNSQueriesTotal,
 		m.DNSZonesActive,
 		m.AuthFailuresTotal,
+		m.DNSQueryDuration,
+		m.DNSQueriesByZone,
+		m.BGPSessionState,
+		m.BGPSessionTransitionsTotal,
+		m.RouteHealthChecksTotal,
+		m.RouteHealthy,
+		m.OverlayHealthChecksTotal,
+		m.OverlayPeerHealthy,
 	)
 
 	return m

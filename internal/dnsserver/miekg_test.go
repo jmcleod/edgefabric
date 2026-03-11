@@ -30,7 +30,7 @@ func startTestServer(t *testing.T) (*MiekgService, string) {
 	port := getFreePort(t)
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 
-	svc := NewMiekgService()
+	svc := NewMiekgService(nil, nil)
 	if err := svc.Start(context.Background(), addr); err != nil {
 		t.Fatalf("start server: %v", err)
 	}

@@ -15,6 +15,14 @@ const (
 	ProvisioningFailed   EventType = "provisioning.failed"
 	CertificateExpiring  EventType = "certificate.expiring"
 	HealthCheckFailed    EventType = "health_check.failed"
+
+	// Monitoring events (Milestone 11).
+	OverlayPeerUnreachable    EventType = "overlay.peer_unreachable"
+	OverlayPeerRecovered      EventType = "overlay.peer_recovered"
+	BGPSessionDown            EventType = "bgp.session_down"
+	BGPSessionEstablished     EventType = "bgp.session_established"
+	RouteHealthCheckFailed    EventType = "route.health_check_failed"
+	RouteHealthCheckRecovered EventType = "route.health_check_recovered"
 )
 
 // Severity indicates how urgent an event is.

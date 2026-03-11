@@ -3,15 +3,18 @@ package dnsserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	mdns "github.com/miekg/dns"
 
 	"github.com/jmcleod/edgefabric/internal/dns"
 	"github.com/jmcleod/edgefabric/internal/domain"
+	"github.com/jmcleod/edgefabric/internal/observability"
 )
 
 // Ensure MiekgService implements Service at compile time.
@@ -48,12 +51,17 @@ type MiekgService struct {
 	tcpServer *mdns.Server
 
 	queriesTotal atomic.Uint64
+
+	logger  *slog.Logger
+	metrics *observability.Metrics
 }
 
 // NewMiekgService creates a new miekg/dns authoritative DNS server.
-func NewMiekgService() *MiekgService {
+func NewMiekgService(logger *slog.Logger, metrics *observability.Metrics) *MiekgService {
 	return &MiekgService{
-		zones: make(map[string]*zoneData),
+		zones:   make(map[string]*zoneData),
+		logger:  logger,
+		metrics: metrics,
 	}
 }
 
@@ -195,6 +203,7 @@ func (s *MiekgService) GetStatus(_ context.Context) (*ServerStatus, error) {
 
 // handleQuery is the miekg/dns handler for all incoming queries.
 func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
+	start := time.Now()
 	s.queriesTotal.Add(1)
 
 	msg := new(mdns.Msg)
@@ -205,6 +214,7 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 	if len(r.Question) == 0 {
 		msg.Rcode = mdns.RcodeServerFailure
 		w.WriteMsg(msg)
+		s.recordQueryMetrics("unknown", "UNKNOWN", msg.Rcode, start)
 		return
 	}
 
@@ -220,14 +230,18 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 		msg.Rcode = mdns.RcodeRefused
 		msg.Authoritative = false
 		w.WriteMsg(msg)
+		s.recordQueryMetrics("unknown", mdns.TypeToString[q.Qtype], msg.Rcode, start)
 		return
 	}
+
+	zoneName := zd.name
 
 	// Handle SOA queries.
 	if q.Qtype == mdns.TypeSOA {
 		soa := s.buildSOA(zd)
 		msg.Answer = append(msg.Answer, soa)
 		w.WriteMsg(msg)
+		s.recordQueryMetrics(zoneName, "SOA", msg.Rcode, start)
 		return
 	}
 
@@ -253,6 +267,7 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 			msg.Answer = append(msg.Answer, ns)
 		}
 		w.WriteMsg(msg)
+		s.recordQueryMetrics(zoneName, "NS", msg.Rcode, start)
 		return
 	}
 
@@ -275,6 +290,7 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 			}
 			s.mu.RUnlock()
 			w.WriteMsg(msg)
+			s.recordQueryMetrics(zoneName, mdns.TypeToString[q.Qtype], msg.Rcode, start)
 			return
 		}
 	}
@@ -297,6 +313,30 @@ func (s *MiekgService) handleQuery(w mdns.ResponseWriter, r *mdns.Msg) {
 	}
 
 	w.WriteMsg(msg)
+	s.recordQueryMetrics(zoneName, mdns.TypeToString[q.Qtype], msg.Rcode, start)
+}
+
+// recordQueryMetrics records per-query Prometheus metrics and structured log output.
+func (s *MiekgService) recordQueryMetrics(zone, qtype string, rcode int, start time.Time) {
+	duration := time.Since(start)
+	rcodeStr := mdns.RcodeToString[rcode]
+	if rcodeStr == "" {
+		rcodeStr = fmt.Sprintf("%d", rcode)
+	}
+
+	if s.metrics != nil {
+		s.metrics.DNSQueryDuration.WithLabelValues(zone, qtype, rcodeStr).Observe(duration.Seconds())
+		s.metrics.DNSQueriesByZone.WithLabelValues(zone, qtype, rcodeStr).Inc()
+	}
+
+	if s.logger != nil {
+		s.logger.Debug("dns query",
+			slog.String("zone", zone),
+			slog.String("qtype", qtype),
+			slog.String("rcode", rcodeStr),
+			slog.Duration("duration", duration),
+		)
+	}
 }
 
 // findZone finds the most specific zone for a query name.

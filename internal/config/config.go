@@ -92,14 +92,23 @@ type SecretsConfig struct {
 
 // NodeConfig holds node-specific settings.
 type NodeConfig struct {
-	ControllerAddr  string      `yaml:"controller_addr"`
-	EnrollmentToken string      `yaml:"enrollment_token,omitempty"`
-	DataDir         string      `yaml:"data_dir"`
-	HealthAddr      string      `yaml:"health_addr,omitempty"` // Health/metrics server address. Default ":9090"
-	BGP             BGPConfig   `yaml:"bgp,omitempty"`
-	DNS             DNSConfig   `yaml:"dns,omitempty"`
-	CDN             CDNConfig   `yaml:"cdn,omitempty"`
-	Route           RouteConfig `yaml:"route,omitempty"`
+	ControllerAddr  string           `yaml:"controller_addr"`
+	EnrollmentToken string           `yaml:"enrollment_token,omitempty"`
+	DataDir         string           `yaml:"data_dir"`
+	HealthAddr      string           `yaml:"health_addr,omitempty"` // Health/metrics server address. Default ":9090"
+	BGP             BGPConfig        `yaml:"bgp,omitempty"`
+	DNS             DNSConfig        `yaml:"dns,omitempty"`
+	CDN             CDNConfig        `yaml:"cdn,omitempty"`
+	Route           RouteConfig      `yaml:"route,omitempty"`
+	Monitoring      MonitoringConfig `yaml:"monitoring,omitempty"`
+}
+
+// MonitoringConfig holds node-side monitoring settings.
+type MonitoringConfig struct {
+	OverlayHealthInterval string `yaml:"overlay_health_interval,omitempty"` // Duration string. Default "30s"
+	BGPPollInterval       string `yaml:"bgp_poll_interval,omitempty"`       // Duration string. Default "15s"
+	RouteHealthInterval   string `yaml:"route_health_interval,omitempty"`   // Duration string. Default "30s"
+	ControllerOverlayIP   string `yaml:"controller_overlay_ip,omitempty"`   // WireGuard overlay IP to probe. Default: empty (disabled)
 }
 
 // BGPConfig holds BGP runtime settings for a node.

@@ -14,9 +14,12 @@ import (
 	"github.com/jmcleod/edgefabric/internal/cdnserver"
 	"github.com/jmcleod/edgefabric/internal/config"
 	"github.com/jmcleod/edgefabric/internal/dnsserver"
+	"github.com/jmcleod/edgefabric/internal/events"
+	"github.com/jmcleod/edgefabric/internal/networking"
 	"github.com/jmcleod/edgefabric/internal/nodeclient"
 	"github.com/jmcleod/edgefabric/internal/nodestate"
 	"github.com/jmcleod/edgefabric/internal/observability"
+	"github.com/jmcleod/edgefabric/internal/route"
 	"github.com/jmcleod/edgefabric/internal/routeserver"
 )
 
@@ -35,6 +38,24 @@ func RunNode(cfg *config.Config) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Create shared metrics and event bus for node-side monitoring.
+	metrics := observability.NewMetrics()
+	eventBus := events.NewBus(logger)
+
+	// Subscribe a log handler for monitoring events on the node side.
+	monitoringEvents := []events.EventType{
+		events.OverlayPeerUnreachable,
+		events.OverlayPeerRecovered,
+		events.BGPSessionDown,
+		events.BGPSessionEstablished,
+		events.RouteHealthCheckFailed,
+		events.RouteHealthCheckRecovered,
+	}
+	logHandler := events.NewLogHandler(logger)
+	for _, et := range monitoringEvents {
+		eventBus.Subscribe(et, logHandler)
+	}
 
 	// Load or establish node identity.
 	client, err := resolveNodeIdentity(ctx, cfg, logger)
@@ -67,6 +88,11 @@ func RunNode(cfg *config.Config) error {
 
 				// Start BGP reconciliation loop.
 				go bgpReconcileLoop(ctx, bgpSvc, client, logger)
+
+				// Start BGP session monitor (Milestone 11.2).
+				bgpMon := bgp.NewMonitor(bgpSvc, bgp.DefaultMonitorConfig(), eventBus, metrics, logger)
+				bgpMon.Start(ctx)
+				defer bgpMon.Stop()
 			}
 		}
 	}
@@ -74,7 +100,7 @@ func RunNode(cfg *config.Config) error {
 	// Initialize DNS service if enabled.
 	var dnsSvc dnsserver.Service
 	if cfg.Node.DNS.Enabled {
-		dnsSvc = initDNSService(cfg.Node.DNS, logger)
+		dnsSvc = initDNSService(cfg.Node.DNS, logger, metrics)
 		if dnsSvc != nil {
 			listenAddr := cfg.Node.DNS.ListenAddr
 			if listenAddr == "" {
@@ -121,6 +147,7 @@ func RunNode(cfg *config.Config) error {
 
 	// Initialize route forwarding service if enabled.
 	var routeSvc routeserver.Service
+	var routeHealth *routeserver.RouteHealthChecker
 	if cfg.Node.Route.Enabled {
 		routeSvc = initRouteService(cfg.Node.Route, logger)
 		if routeSvc != nil {
@@ -131,14 +158,34 @@ func RunNode(cfg *config.Config) error {
 					slog.String("mode", cfg.Node.Route.Mode),
 				)
 
-				// Start route reconciliation loop.
-				go routeReconcileLoop(ctx, routeSvc, client, logger)
+				// Start route health checker (Milestone 11.3).
+				routeHealth = routeserver.NewRouteHealthChecker(
+					routeserver.DefaultRouteHealthConfig(),
+					eventBus, metrics, logger,
+				)
+				routeHealth.Start()
+				defer routeHealth.Stop()
+
+				// Start route reconciliation loop (passes health checker for target updates).
+				go routeReconcileLoop(ctx, routeSvc, client, logger, routeHealth)
 			}
 		}
 	}
 
+	// Start WireGuard overlay health checker if overlay IP is configured (Milestone 11.1).
+	overlayTargets := buildOverlayTargets(cfg)
+	if len(overlayTargets) > 0 {
+		overlayHealth := networking.NewOverlayHealthChecker(
+			overlayTargets,
+			networking.DefaultOverlayHealthConfig(),
+			eventBus, metrics, logger,
+		)
+		overlayHealth.Start()
+		defer overlayHealth.Stop()
+	}
+
 	// Start health/metrics server for Prometheus scraping and health probes.
-	healthSrv := startNodeHealthServer(cfg.Node, bgpSvc, dnsSvc, cdnSvc, routeSvc, logger)
+	healthSrv := startNodeHealthServer(cfg.Node, bgpSvc, dnsSvc, cdnSvc, routeSvc, metrics, logger)
 
 	<-ctx.Done()
 	logger.Info("shutting down node")
@@ -267,7 +314,7 @@ func initBGPService(cfg config.BGPConfig, logger *slog.Logger) bgp.Service {
 }
 
 // initDNSService creates the appropriate DNS service based on config mode.
-func initDNSService(cfg config.DNSConfig, logger *slog.Logger) dnsserver.Service {
+func initDNSService(cfg config.DNSConfig, logger *slog.Logger, metrics *observability.Metrics) dnsserver.Service {
 	mode := cfg.Mode
 	if mode == "" {
 		mode = "noop"
@@ -276,7 +323,7 @@ func initDNSService(cfg config.DNSConfig, logger *slog.Logger) dnsserver.Service
 	switch mode {
 	case "miekg":
 		logger.Info("using miekg/dns authoritative DNS service")
-		return dnsserver.NewMiekgService()
+		return dnsserver.NewMiekgService(logger, metrics)
 	case "noop":
 		logger.Info("using noop DNS service (demo mode)")
 		return dnsserver.NewNoopService()
@@ -433,7 +480,8 @@ func initRouteService(cfg config.RouteConfig, logger *slog.Logger) routeserver.S
 
 // routeReconcileLoop periodically polls the controller for desired route state
 // and reconciles the local route forwarding service to match. Runs every 30 seconds.
-func routeReconcileLoop(ctx context.Context, svc routeserver.Service, client *nodeclient.Client, logger *slog.Logger) {
+// If healthChecker is non-nil, it updates the health checker's targets after each reconciliation.
+func routeReconcileLoop(ctx context.Context, svc routeserver.Service, client *nodeclient.Client, logger *slog.Logger, healthChecker *routeserver.RouteHealthChecker) {
 	// Immediate first reconciliation — don't wait 30s.
 	rtCfg, err := client.FetchRouteConfig(ctx)
 	if err != nil {
@@ -442,6 +490,7 @@ func routeReconcileLoop(ctx context.Context, svc routeserver.Service, client *no
 		logger.Warn("route initial reconciliation failed", slog.String("error", err.Error()))
 	} else {
 		logger.Info("route initial reconciliation complete", slog.Int("routes", len(rtCfg.Routes)))
+		updateRouteHealthTargets(healthChecker, rtCfg)
 	}
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -461,8 +510,44 @@ func routeReconcileLoop(ctx context.Context, svc routeserver.Service, client *no
 				logger.Warn("route reconciliation failed", slog.String("error", err.Error()))
 			} else {
 				logger.Debug("route reconciliation complete", slog.Int("routes", len(rtCfg.Routes)))
+				updateRouteHealthTargets(healthChecker, rtCfg)
 			}
 		}
+	}
+}
+
+// updateRouteHealthTargets extracts route targets from config and feeds them to the health checker.
+func updateRouteHealthTargets(hc *routeserver.RouteHealthChecker, rtCfg *route.NodeRouteConfig) {
+	if hc == nil || rtCfg == nil {
+		return
+	}
+	var targets []routeserver.RouteTarget
+	for _, rwg := range rtCfg.Routes {
+		port := 0
+		if rwg.Route.EntryPort != nil {
+			port = *rwg.Route.EntryPort
+		}
+		targets = append(targets, routeserver.RouteTarget{
+			RouteID:     rwg.Route.ID,
+			RouteName:   rwg.Route.Name,
+			Protocol:    rwg.Route.Protocol,
+			GatewayWGIP: rwg.GatewayWGIP,
+			EntryPort:   port,
+		})
+	}
+	hc.UpdateTargets(targets)
+}
+
+// buildOverlayTargets constructs overlay health check targets from config.
+// Returns an empty slice if WireGuard overlay is not configured (e.g. Docker demo mode).
+func buildOverlayTargets(cfg *config.Config) []networking.OverlayTarget {
+	// The controller overlay IP defaults to the WireGuard hub address.
+	controllerIP := cfg.Node.Monitoring.ControllerOverlayIP
+	if controllerIP == "" {
+		return nil // No overlay to monitor.
+	}
+	return []networking.OverlayTarget{
+		{Name: "controller", IP: controllerIP},
 	}
 }
 
@@ -474,6 +559,7 @@ func startNodeHealthServer(
 	dnsSvc dnsserver.Service,
 	cdnSvc cdnserver.Service,
 	routeSvc routeserver.Service,
+	metrics *observability.Metrics,
 	logger *slog.Logger,
 ) *http.Server {
 	healthAddr := cfg.HealthAddr
@@ -482,7 +568,6 @@ func startNodeHealthServer(
 	}
 
 	health := observability.NewHealthChecker()
-	metrics := observability.NewMetrics()
 
 	// Register health checks for enabled services.
 	if bgpSvc != nil {

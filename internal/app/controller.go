@@ -343,6 +343,12 @@ var allEventTypes = []events.EventType{
 	events.ProvisioningFailed,
 	events.CertificateExpiring,
 	events.HealthCheckFailed,
+	events.OverlayPeerUnreachable,
+	events.OverlayPeerRecovered,
+	events.BGPSessionDown,
+	events.BGPSessionEstablished,
+	events.RouteHealthCheckFailed,
+	events.RouteHealthCheckRecovered,
 }
 
 // registerNotificationHandlers wires webhook and Slack handlers onto the event
