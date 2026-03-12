@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pquerna/otp/totp"
@@ -87,6 +88,9 @@ func (s *DefaultService) AuthenticateTOTP(ctx context.Context, userID domain.ID,
 // The prefix (first 8 chars) is stored in plaintext for efficient lookup.
 // The full key is compared via bcrypt to prevent timing attacks.
 func (s *DefaultService) AuthenticateAPIKey(ctx context.Context, rawKey string) (*domain.APIKey, error) {
+	// Strip the "ef_" prefix added during generation.
+	rawKey = strings.TrimPrefix(rawKey, "ef_")
+
 	if len(rawKey) < 8 {
 		return nil, fmt.Errorf("invalid API key format")
 	}
@@ -214,5 +218,5 @@ func (s *DefaultService) GenerateAPIKey(ctx context.Context, tenantID, userID do
 		return "", nil, fmt.Errorf("create API key: %w", err)
 	}
 
-	return rawKey, apiKey, nil
+	return "ef_" + rawKey, apiKey, nil
 }
