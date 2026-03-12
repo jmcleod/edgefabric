@@ -1,6 +1,8 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { CopyableText } from '@/components/ui/CopyableText';
 import { StatCard } from '@/components/ui/StatCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useNode, useDeleteNode, useNodeAction } from '@/hooks/useNodes';
+import { useTenants } from '@/hooks/useTenants';
+import { useNodeGroups } from '@/hooks/useNodeGroups';
 import { useBGPSessions } from '@/hooks/useBGP';
 import { useWireGuardPeers } from '@/hooks/useWireGuard';
 import { useProvisioningJobs } from '@/hooks/useProvisioning';
@@ -38,6 +42,10 @@ export default function NodeDetailPage() {
   const { data: jobsData } = useProvisioningJobs(id);
   const nodeAction = useNodeAction();
   const deleteNode = useDeleteNode();
+  const { data: tenantsData } = useTenants();
+  const { data: nodeGroupsData } = useNodeGroups();
+  const tenantMap = useMemo(() => Object.fromEntries((tenantsData?.items || []).map((t) => [t.id, t.name])), [tenantsData]);
+  const nodeGroupMap = useMemo(() => Object.fromEntries((nodeGroupsData?.items || []).map((g) => [g.id, g.name])), [nodeGroupsData]);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const nodeBgpPeers = bgpData?.items || [];
@@ -143,17 +151,17 @@ export default function NodeDetailPage() {
                 <CardTitle className="text-base">Node Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <InfoRow label="Hostname" value={node.hostname} mono />
-                <InfoRow label="IPv4 Address" value={node.ipv4} mono />
-                {node.ipv6 && <InfoRow label="WireGuard IPv4" value={node.ipv6} mono />}
-                {node.wireGuardIPv6 && <InfoRow label="WireGuard IPv6" value={node.wireGuardIPv6} mono />}
-                <InfoRow label="Location" value={node.location} />
-                <InfoRow label="Region" value={node.region} />
-                <InfoRow label="Last Seen" value={
-                  node.lastSeen
+                <InfoRow label="Hostname"><CopyableText value={node.hostname} /></InfoRow>
+                <InfoRow label="IPv4 Address"><CopyableText value={node.ipv4} /></InfoRow>
+                {node.ipv6 && <InfoRow label="WireGuard IPv4"><CopyableText value={node.ipv6} /></InfoRow>}
+                {node.wireGuardIPv6 && <InfoRow label="WireGuard IPv6"><CopyableText value={node.wireGuardIPv6} /></InfoRow>}
+                <InfoRow label="Location">{node.location}</InfoRow>
+                <InfoRow label="Region">{node.region}</InfoRow>
+                <InfoRow label="Last Seen">
+                  {node.lastSeen
                     ? formatDistanceToNow(new Date(node.lastSeen), { addSuffix: true })
-                    : '\u2014'
-                } />
+                    : '\u2014'}
+                </InfoRow>
               </CardContent>
             </Card>
 
@@ -162,11 +170,19 @@ export default function NodeDetailPage() {
                 <CardTitle className="text-base">Metadata</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <InfoRow label="Node ID" value={node.id} mono />
-                <InfoRow label="Version" value={node.version} />
-                <InfoRow label="Uptime" value={node.uptime} />
-                {node.tenantId && <InfoRow label="Tenant ID" value={node.tenantId} mono />}
-                {node.nodeGroupId && <InfoRow label="Node Group" value={node.nodeGroupId} mono />}
+                <InfoRow label="Node ID"><CopyableText value={node.id} /></InfoRow>
+                <InfoRow label="Version">{node.version}</InfoRow>
+                <InfoRow label="Uptime">{node.uptime}</InfoRow>
+                {node.tenantId && (
+                  <InfoRow label="Tenant">
+                    <Link to={`/tenants/${node.tenantId}`} className="text-primary hover:underline text-sm">
+                      {tenantMap[node.tenantId] || node.tenantId}
+                    </Link>
+                  </InfoRow>
+                )}
+                {node.nodeGroupId && (
+                  <InfoRow label="Node Group">{nodeGroupMap[node.nodeGroupId] || node.nodeGroupId}</InfoRow>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -282,11 +298,11 @@ export default function NodeDetailPage() {
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`text-sm ${mono ? 'mono-data' : ''}`}>{value}</span>
+      <span className="text-sm">{children}</span>
     </div>
   );
 }

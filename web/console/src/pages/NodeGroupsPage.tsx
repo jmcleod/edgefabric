@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useNodeGroups, useCreateNodeGroup, useDeleteNodeGroup } from '@/hooks/useNodeGroups';
+import { useTenants } from '@/hooks/useTenants';
 import { nodeGroupSchema, type NodeGroupFormData } from '@/lib/schemas';
 import type { NodeGroup } from '@/types';
+import { formatDistanceToNow } from 'date-fns';
 import { Boxes, MoreHorizontal, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -17,20 +20,38 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const fields: FieldConfig<NodeGroupFormData>[] = [
-  { name: 'name', label: 'Name', placeholder: 'cdn-us-east' },
-  { name: 'description', label: 'Description', placeholder: 'CDN nodes in US East region' },
-  { name: 'tenant_id', label: 'Tenant ID', placeholder: 'Tenant UUID' },
-];
-
 export default function NodeGroupsPage() {
   const { data, isLoading } = useNodeGroups();
   const groups = data?.items || [];
   const createGroup = useCreateNodeGroup();
   const deleteGroup = useDeleteNodeGroup();
+  const { data: tenantsData } = useTenants();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<NodeGroup | null>(null);
+
+  const tenantOptions = useMemo(
+    () =>
+      (tenantsData?.items || []).map((t) => ({
+        value: t.id,
+        label: t.name,
+      })),
+    [tenantsData],
+  );
+
+  const tenantMap = useMemo(
+    () =>
+      Object.fromEntries(
+        (tenantsData?.items || []).map((t) => [t.id, t.name]),
+      ),
+    [tenantsData],
+  );
+
+  const fields: FieldConfig<NodeGroupFormData>[] = [
+    { name: 'name', label: 'Name', placeholder: 'cdn-us-east' },
+    { name: 'description', label: 'Description', placeholder: 'CDN nodes in US East region' },
+    { name: 'tenant_id', label: 'Tenant', type: 'combobox', comboboxOptions: tenantOptions, placeholder: 'Select a tenant...' },
+  ];
 
   const columns: Column<NodeGroup>[] = [
     {
@@ -44,6 +65,15 @@ export default function NodeGroupsPage() {
       ),
     },
     {
+      key: 'tenantId',
+      header: 'Tenant',
+      render: (g) => (
+        <span className="text-sm">
+          {g.tenantId ? tenantMap[g.tenantId] || g.tenantId?.slice(0, 8) + '...' : '\u2014'}
+        </span>
+      ),
+    },
+    {
       key: 'nodeCount',
       header: 'Nodes',
       render: (g) => <span className="text-sm">{g.nodeCount}</span>,
@@ -51,7 +81,7 @@ export default function NodeGroupsPage() {
     {
       key: 'createdAt',
       header: 'Created',
-      render: (g) => new Date(g.createdAt).toLocaleDateString(),
+      render: (g) => formatDistanceToNow(new Date(g.createdAt), { addSuffix: true }),
     },
     {
       key: 'actions',
@@ -85,6 +115,13 @@ export default function NodeGroupsPage() {
 
       {isLoading ? (
         <Skeleton className="h-96" />
+      ) : groups.length === 0 ? (
+        <EmptyState
+          icon={Boxes}
+          title="No node groups yet"
+          description="Create a node group to organize your edge nodes."
+          action={{ label: 'Create Group', onClick: () => setCreateOpen(true) }}
+        />
       ) : (
         <DataTable data={groups} columns={columns} searchKeys={['name']} pageSize={10} />
       )}

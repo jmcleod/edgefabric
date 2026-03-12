@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/hooks/useUsers';
+import { useTenants } from '@/hooks/useTenants';
 import { userSchema, type UserFormData } from '@/lib/schemas';
 import type { User } from '@/types';
 import { Users, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
@@ -20,24 +22,41 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const userFields: FieldConfig<UserFormData>[] = [
-  { name: 'name', label: 'Full Name', placeholder: 'Jane Doe' },
-  { name: 'email', label: 'Email', type: 'email', placeholder: 'jane@example.com' },
-  { name: 'password', label: 'Password', type: 'password', placeholder: 'Min 8 characters', description: 'Leave blank when editing to keep current password' },
-  { name: 'role', label: 'Role', type: 'select', options: [
-    { label: 'Superuser', value: 'superuser' },
-    { label: 'Admin', value: 'admin' },
-    { label: 'Read Only', value: 'readonly' },
-  ] },
-  { name: 'tenant_id', label: 'Tenant ID', placeholder: 'Optional — leave blank for platform users', description: 'Assign this user to a specific tenant' },
-];
-
 export default function UsersPage() {
   const { data, isLoading } = useUsers();
   const users = data?.items || [];
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
+
+  const { data: tenantsData } = useTenants();
+
+  const tenantOptions = useMemo(
+    () =>
+      (tenantsData?.items || []).map((t) => ({
+        label: t.name,
+        value: t.id,
+      })),
+    [tenantsData],
+  );
+
+  const tenantMap = useMemo(
+    () =>
+      new Map((tenantsData?.items || []).map((t) => [t.id, t.name])),
+    [tenantsData],
+  );
+
+  const userFields: FieldConfig<UserFormData>[] = [
+    { name: 'name', label: 'Full Name', placeholder: 'Jane Doe' },
+    { name: 'email', label: 'Email', type: 'email', placeholder: 'jane@example.com' },
+    { name: 'password', label: 'Password', type: 'password', placeholder: 'Min 8 characters', description: 'Leave blank when editing to keep current password' },
+    { name: 'role', label: 'Role', type: 'select', options: [
+      { label: 'Superuser', value: 'superuser' },
+      { label: 'Admin', value: 'admin' },
+      { label: 'Read Only', value: 'readonly' },
+    ] },
+    { name: 'tenant_id', label: 'Tenant ID', type: 'combobox', comboboxOptions: tenantOptions, placeholder: 'Select a tenant (optional)...', clearable: true, description: 'Assign this user to a specific tenant' },
+  ];
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
@@ -61,6 +80,15 @@ export default function UsersPage() {
         <Badge variant={user.role === 'superuser' ? 'default' : 'secondary'}>
           {user.role}
         </Badge>
+      ),
+    },
+    {
+      key: 'tenant',
+      header: 'Tenant',
+      render: (user) => (
+        <span className="text-sm text-muted-foreground">
+          {user.tenantId ? tenantMap.get(user.tenantId) ?? '\u2014' : '\u2014'}
+        </span>
       ),
     },
     {
@@ -118,6 +146,16 @@ export default function UsersPage() {
 
       {isLoading ? (
         <Skeleton className="h-96" />
+      ) : users.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No users yet"
+          description="Add users to grant access to the platform."
+          action={{
+            label: 'Add User',
+            onClick: () => setCreateOpen(true),
+          }}
+        />
       ) : (
         <DataTable
           data={users}

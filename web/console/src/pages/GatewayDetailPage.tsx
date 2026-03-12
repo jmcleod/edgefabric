@@ -1,22 +1,18 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { CopyableText } from '@/components/ui/CopyableText';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useGateway, useUpdateGateway, useDeleteGateway } from '@/hooks/useGateways';
+import { useTenants } from '@/hooks/useTenants';
 import { gatewaySchema, type GatewayFormData } from '@/lib/schemas';
 import { Waypoints, ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-
-const gatewayFields: FieldConfig<GatewayFormData>[] = [
-  { name: 'name', label: 'Name', placeholder: 'us-east-gw-01' },
-  { name: 'tenant_id', label: 'Tenant ID', placeholder: 'Tenant UUID' },
-  { name: 'public_ip', label: 'Public IP', placeholder: '203.0.113.1' },
-];
 
 export default function GatewayDetailPage() {
   const { id } = useParams();
@@ -24,6 +20,22 @@ export default function GatewayDetailPage() {
   const { data: gateway, isLoading, error } = useGateway(id);
   const updateGateway = useUpdateGateway();
   const deleteGateway = useDeleteGateway();
+  const { data: tenantsData } = useTenants();
+
+  const tenantOptions = useMemo(
+    () => (tenantsData?.items || []).map((t) => ({ label: t.name, value: t.id, description: t.id.slice(0, 8) + '...' })),
+    [tenantsData],
+  );
+  const tenantMap = useMemo(
+    () => Object.fromEntries((tenantsData?.items || []).map((t) => [t.id, t.name])),
+    [tenantsData],
+  );
+
+  const gatewayFields: FieldConfig<GatewayFormData>[] = [
+    { name: 'name', label: 'Name', placeholder: 'us-east-gw-01' },
+    { name: 'tenant_id', label: 'Tenant', type: 'combobox', placeholder: 'Select a tenant...', comboboxOptions: tenantOptions },
+    { name: 'public_ip', label: 'Public IP', placeholder: '203.0.113.1' },
+  ];
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -93,15 +105,15 @@ export default function GatewayDetailPage() {
             <CardTitle className="text-base">Gateway Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <InfoRow label="ID" value={gateway.id} mono />
-            <InfoRow label="Name" value={gateway.name} />
-            <InfoRow label="Public IP" value={gateway.publicIp} mono />
-            <InfoRow label="Status" value={gateway.status} />
-            <InfoRow label="Last Seen" value={
-              gateway.lastSeen
+            <InfoRow label="ID"><CopyableText value={gateway.id} /></InfoRow>
+            <InfoRow label="Name">{gateway.name}</InfoRow>
+            <InfoRow label="Public IP"><CopyableText value={gateway.publicIp} /></InfoRow>
+            <InfoRow label="Status"><StatusBadge status={gateway.status} size="sm" /></InfoRow>
+            <InfoRow label="Last Seen">
+              {gateway.lastSeen
                 ? formatDistanceToNow(new Date(gateway.lastSeen), { addSuffix: true })
-                : '\u2014'
-            } />
+                : '\u2014'}
+            </InfoRow>
           </CardContent>
         </Card>
 
@@ -110,9 +122,15 @@ export default function GatewayDetailPage() {
             <CardTitle className="text-base">Metadata</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <InfoRow label="Hostname" value={gateway.hostname} />
-            <InfoRow label="Location" value={gateway.location} />
-            {gateway.tenantId && <InfoRow label="Tenant ID" value={gateway.tenantId} mono />}
+            <InfoRow label="Hostname">{gateway.hostname}</InfoRow>
+            <InfoRow label="Location">{gateway.location}</InfoRow>
+            {gateway.tenantId && (
+              <InfoRow label="Tenant">
+                <Link to={`/tenants/${gateway.tenantId}`} className="text-primary hover:underline text-sm">
+                  {tenantMap[gateway.tenantId] || gateway.tenantId}
+                </Link>
+              </InfoRow>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -148,11 +166,11 @@ export default function GatewayDetailPage() {
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`text-sm ${mono ? 'mono-data' : ''}`}>{value}</span>
+      <span className="text-sm">{children}</span>
     </div>
   );
 }

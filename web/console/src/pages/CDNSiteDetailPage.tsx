@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { CopyableText } from '@/components/ui/CopyableText';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,8 +21,9 @@ import {
   useUpdateCDNSite,
   usePurgeCache,
 } from '@/hooks/useCDN';
+import { useNodeGroups } from '@/hooks/useNodeGroups';
+import { useTenants } from '@/hooks/useTenants';
 import { cdnOriginSchema, type CDNOriginFormData, cdnSiteSchema, type CDNSiteFormData, cachePurgeSchema, type CachePurgeFormData } from '@/lib/schemas';
-import { siteFields } from '@/pages/CDNServicesPage';
 import type { CDNOrigin } from '@/types';
 import { Layers, ArrowLeft, Trash2, MoreHorizontal, Pencil, RefreshCw, Shield, ShieldAlert } from 'lucide-react';
 import {
@@ -65,6 +67,34 @@ export default function CDNSiteDetailPage() {
   const deleteSite = useDeleteCDNSite();
   const updateSite = useUpdateCDNSite();
   const purgeCache = usePurgeCache(id || '');
+
+  const { data: nodeGroupsData } = useNodeGroups();
+  const { data: tenantsData } = useTenants();
+  const nodeGroupOptions = useMemo(
+    () => (nodeGroupsData?.items || []).map((g) => ({ label: g.name, value: g.id, description: g.id.slice(0, 8) + '...' })),
+    [nodeGroupsData],
+  );
+  const nodeGroupMap = useMemo(
+    () => Object.fromEntries((nodeGroupsData?.items || []).map((g) => [g.id, g.name])),
+    [nodeGroupsData],
+  );
+  const tenantMap = useMemo(
+    () => Object.fromEntries((tenantsData?.items || []).map((t) => [t.id, t.name])),
+    [tenantsData],
+  );
+
+  const siteFields: FieldConfig<CDNSiteFormData>[] = [
+    { name: 'name', label: 'Name', placeholder: 'my-cdn-site' },
+    { name: 'domains', label: 'Domains', placeholder: 'cdn.example.com (comma-separated)', description: 'Comma-separated list of domains' },
+    { name: 'tls_mode', label: 'TLS Mode', type: 'select', options: [{ label: 'Auto (Let\'s Encrypt)', value: 'auto' }, { label: 'Manual', value: 'manual' }, { label: 'Disabled', value: 'disabled' }] },
+    { name: 'cache_enabled', label: 'Enable Caching', type: 'switch' },
+    { name: 'cache_ttl', label: 'Cache TTL (seconds)', type: 'number', placeholder: '3600' },
+    { name: 'compression_enabled', label: 'Enable Compression (Brotli + Gzip)', type: 'switch' },
+    { name: 'rate_limit_rps', label: 'Rate Limit (req/s)', type: 'number', placeholder: '0 = unlimited' },
+    { name: 'waf_enabled', label: 'Enable WAF', type: 'switch', description: 'Web Application Firewall protects against SQLi, XSS, and path traversal attacks' },
+    { name: 'waf_mode', label: 'WAF Mode', type: 'select', options: [{ label: 'Detect Only (log matches)', value: 'detect' }, { label: 'Block (return 403)', value: 'block' }], visibleWhen: { field: 'waf_enabled', value: true } },
+    { name: 'node_group_id', label: 'Node Group', type: 'combobox', placeholder: 'Select a node group (optional)...', comboboxOptions: nodeGroupOptions, clearable: true },
+  ];
 
   const [createOriginOpen, setCreateOriginOpen] = useState(false);
   const [editOriginTarget, setEditOriginTarget] = useState<CDNOrigin | null>(null);
@@ -207,11 +237,11 @@ export default function CDNSiteDetailPage() {
                 <CardTitle className="text-base">Site Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <InfoRow label="ID" value={site.id} mono />
-                <InfoRow label="Name" value={site.name} />
-                <InfoRow label="Domains" value={site.domains.length > 0 ? site.domains.join(', ') : 'None'} />
-                <InfoRow label="TLS Mode" value={site.tlsMode.toUpperCase()} />
-                <InfoRow label="Created" value={new Date(site.createdAt).toLocaleDateString()} />
+                <InfoRow label="ID"><CopyableText value={site.id} /></InfoRow>
+                <InfoRow label="Name">{site.name}</InfoRow>
+                <InfoRow label="Domains">{site.domains.length > 0 ? site.domains.join(', ') : 'None'}</InfoRow>
+                <InfoRow label="TLS Mode">{site.tlsMode.toUpperCase()}</InfoRow>
+                <InfoRow label="Created">{new Date(site.createdAt).toLocaleDateString()}</InfoRow>
               </CardContent>
             </Card>
 
@@ -220,10 +250,10 @@ export default function CDNSiteDetailPage() {
                 <CardTitle className="text-base">Configuration</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <InfoRow label="Caching" value={site.cacheEnabled ? `Enabled (TTL: ${site.cacheTtl}s)` : 'Disabled'} />
-                <InfoRow label="Compression" value={site.compressionEnabled ? 'Brotli + Gzip' : 'Disabled'} />
-                <InfoRow label="Rate Limit" value={site.rateLimitRps ? `${site.rateLimitRps} req/s` : 'Unlimited'} />
-                <InfoRow label="Node Group" value={site.nodeGroupId || 'Default'} />
+                <InfoRow label="Caching">{site.cacheEnabled ? `Enabled (TTL: ${site.cacheTtl}s)` : 'Disabled'}</InfoRow>
+                <InfoRow label="Compression">{site.compressionEnabled ? 'Brotli + Gzip' : 'Disabled'}</InfoRow>
+                <InfoRow label="Rate Limit">{site.rateLimitRps ? `${site.rateLimitRps} req/s` : 'Unlimited'}</InfoRow>
+                <InfoRow label="Node Group">{site.nodeGroupId ? nodeGroupMap[site.nodeGroupId] || site.nodeGroupId : 'Default'}</InfoRow>
               </CardContent>
             </Card>
 
@@ -261,7 +291,11 @@ export default function CDNSiteDetailPage() {
                     </span>
                   </div>
                 )}
-                <InfoRow label="Tenant ID" value={site.tenantId} mono />
+                <InfoRow label="Tenant">
+                  <Link to={`/tenants/${site.tenantId}`} className="text-primary hover:underline text-sm">
+                    {tenantMap[site.tenantId] || site.tenantId}
+                  </Link>
+                </InfoRow>
               </CardContent>
             </Card>
 
@@ -270,9 +304,9 @@ export default function CDNSiteDetailPage() {
                 <CardTitle className="text-base">Traffic</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <InfoRow label="Bandwidth" value={`${site.bandwidthGb.toFixed(1)} GB`} />
-                <InfoRow label="Requests" value={`${site.requestsM.toFixed(1)}M`} />
-                <InfoRow label="Origins" value={String(site.originCount)} />
+                <InfoRow label="Bandwidth">{site.bandwidthGb.toFixed(1)} GB</InfoRow>
+                <InfoRow label="Requests">{site.requestsM.toFixed(1)}M</InfoRow>
+                <InfoRow label="Origins">{String(site.originCount)}</InfoRow>
               </CardContent>
             </Card>
           </div>
@@ -433,11 +467,11 @@ export default function CDNSiteDetailPage() {
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`text-sm ${mono ? 'mono-data' : ''}`}>{value}</span>
+      <span className="text-sm">{children}</span>
     </div>
   );
 }

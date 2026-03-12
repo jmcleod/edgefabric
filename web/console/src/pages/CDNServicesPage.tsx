@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useCDNSites, useCreateCDNSite, useDeleteCDNSite } from '@/hooks/useCDN';
+import { useNodeGroups } from '@/hooks/useNodeGroups';
 import { useAuth } from '@/hooks/useAuth';
 import { cdnSiteSchema, type CDNSiteFormData } from '@/lib/schemas';
 import type { CDNService } from '@/types';
@@ -20,37 +22,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-export const siteFields: FieldConfig<CDNSiteFormData>[] = [
-  { name: 'name', label: 'Name', placeholder: 'my-cdn-site' },
-  { name: 'domains', label: 'Domains', placeholder: 'cdn.example.com (comma-separated)', description: 'Comma-separated list of domains' },
-  {
-    name: 'tls_mode',
-    label: 'TLS Mode',
-    type: 'select',
-    options: [
-      { label: 'Auto (Let\'s Encrypt)', value: 'auto' },
-      { label: 'Manual', value: 'manual' },
-      { label: 'Disabled', value: 'disabled' },
-    ],
-  },
-  { name: 'cache_enabled', label: 'Enable Caching', type: 'switch' },
-  { name: 'cache_ttl', label: 'Cache TTL (seconds)', type: 'number', placeholder: '3600' },
-  { name: 'compression_enabled', label: 'Enable Compression (Brotli + Gzip)', type: 'switch' },
-  { name: 'rate_limit_rps', label: 'Rate Limit (req/s)', type: 'number', placeholder: '0 = unlimited' },
-  { name: 'waf_enabled', label: 'Enable WAF', type: 'switch', description: 'Web Application Firewall protects against SQLi, XSS, and path traversal attacks' },
-  {
-    name: 'waf_mode',
-    label: 'WAF Mode',
-    type: 'select',
-    options: [
-      { label: 'Detect Only (log matches)', value: 'detect' },
-      { label: 'Block (return 403)', value: 'block' },
-    ],
-    visibleWhen: { field: 'waf_enabled', value: true },
-  },
-  { name: 'node_group_id', label: 'Node Group ID', placeholder: 'Optional — assign to a node group' },
-];
 
 function FeatureBadge({ label, enabled }: { label: string; enabled: boolean }) {
   return (
@@ -75,8 +46,47 @@ export default function CDNServicesPage() {
   const createSite = useCreateCDNSite(tenantId);
   const deleteSite = useDeleteCDNSite();
 
+  const { data: nodeGroupsData } = useNodeGroups();
+  const nodeGroups = nodeGroupsData?.items || [];
+
+  const nodeGroupOptions = useMemo(
+    () => nodeGroups.map((g) => ({ label: g.name, value: g.id, description: g.id.slice(0, 8) + '...' })),
+    [nodeGroups],
+  );
+
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CDNService | null>(null);
+
+  const siteFields: FieldConfig<CDNSiteFormData>[] = [
+    { name: 'name', label: 'Name', placeholder: 'my-cdn-site' },
+    { name: 'domains', label: 'Domains', placeholder: 'cdn.example.com (comma-separated)', description: 'Comma-separated list of domains' },
+    {
+      name: 'tls_mode',
+      label: 'TLS Mode',
+      type: 'select',
+      options: [
+        { label: 'Auto (Let\'s Encrypt)', value: 'auto' },
+        { label: 'Manual', value: 'manual' },
+        { label: 'Disabled', value: 'disabled' },
+      ],
+    },
+    { name: 'cache_enabled', label: 'Enable Caching', type: 'switch' },
+    { name: 'cache_ttl', label: 'Cache TTL (seconds)', type: 'number', placeholder: '3600' },
+    { name: 'compression_enabled', label: 'Enable Compression (Brotli + Gzip)', type: 'switch' },
+    { name: 'rate_limit_rps', label: 'Rate Limit (req/s)', type: 'number', placeholder: '0 = unlimited' },
+    { name: 'waf_enabled', label: 'Enable WAF', type: 'switch', description: 'Web Application Firewall protects against SQLi, XSS, and path traversal attacks' },
+    {
+      name: 'waf_mode',
+      label: 'WAF Mode',
+      type: 'select',
+      options: [
+        { label: 'Detect Only (log matches)', value: 'detect' },
+        { label: 'Block (return 403)', value: 'block' },
+      ],
+      visibleWhen: { field: 'waf_enabled', value: true },
+    },
+    { name: 'node_group_id', label: 'Node Group', type: 'combobox', placeholder: 'Select a node group (optional)...', comboboxOptions: nodeGroupOptions, clearable: true },
+  ];
 
   const columns: Column<CDNService>[] = [
     {
@@ -154,6 +164,13 @@ export default function CDNServicesPage() {
 
       {isLoading ? (
         <Skeleton className="h-96" />
+      ) : cdnServices.length === 0 ? (
+        <EmptyState
+          icon={Layers}
+          title="No CDN services yet"
+          description="Create a CDN service to start delivering content at the edge."
+          action={{ label: 'Create Service', onClick: () => setCreateOpen(true) }}
+        />
       ) : (
         <DataTable
           data={cdnServices}

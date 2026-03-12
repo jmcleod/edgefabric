@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useDNSZones, useCreateDNSZone, useDeleteDNSZone } from '@/hooks/useDNS';
+import { useNodeGroups } from '@/hooks/useNodeGroups';
 import { useAuth } from '@/hooks/useAuth';
 import { dnsZoneSchema, type DNSZoneFormData } from '@/lib/schemas';
 import type { DNSZone } from '@/types';
@@ -22,13 +24,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
 
-const zoneFields: FieldConfig<DNSZoneFormData>[] = [
-  { name: 'name', label: 'Zone Name', placeholder: 'example.com' },
-  { name: 'ttl', label: 'Default TTL (seconds)', type: 'number', placeholder: '3600' },
-  { name: 'node_group_id', label: 'Node Group ID', placeholder: 'Optional — assign to a node group' },
-  { name: 'transfer_allowed_ips', label: 'AXFR Allowed IPs', placeholder: '10.0.0.1, 192.168.1.0/24', description: 'Comma-separated IPs or CIDRs allowed to perform zone transfers. Leave empty to disable AXFR.' },
-];
-
 export default function DNSZonesPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -38,8 +33,23 @@ export default function DNSZonesPage() {
   const createZone = useCreateDNSZone(tenantId);
   const deleteZone = useDeleteDNSZone();
 
+  const { data: nodeGroupsData } = useNodeGroups();
+  const nodeGroups = nodeGroupsData?.items || [];
+
+  const nodeGroupOptions = useMemo(
+    () => nodeGroups.map((g) => ({ label: g.name, value: g.id, description: g.id.slice(0, 8) + '...' })),
+    [nodeGroups],
+  );
+
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DNSZone | null>(null);
+
+  const zoneFields: FieldConfig<DNSZoneFormData>[] = [
+    { name: 'name', label: 'Zone Name', placeholder: 'example.com' },
+    { name: 'ttl', label: 'Default TTL (seconds)', type: 'number', placeholder: '3600' },
+    { name: 'node_group_id', label: 'Node Group', type: 'combobox', placeholder: 'Select a node group (optional)...', comboboxOptions: nodeGroupOptions, clearable: true },
+    { name: 'transfer_allowed_ips', label: 'AXFR Allowed IPs', placeholder: '10.0.0.1, 192.168.1.0/24', description: 'Comma-separated IPs or CIDRs allowed to perform zone transfers. Leave empty to disable AXFR.' },
+  ];
 
   const columns: Column<DNSZone>[] = [
     {
@@ -110,6 +120,13 @@ export default function DNSZonesPage() {
 
       {isLoading ? (
         <Skeleton className="h-96" />
+      ) : dnsZones.length === 0 ? (
+        <EmptyState
+          icon={Globe}
+          title="No DNS zones yet"
+          description="Create your first authoritative DNS zone to start serving records."
+          action={{ label: 'Add Zone', onClick: () => setCreateOpen(true) }}
+        />
       ) : (
         <DataTable
           data={dnsZones}

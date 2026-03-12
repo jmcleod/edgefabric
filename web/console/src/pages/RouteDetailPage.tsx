@@ -1,37 +1,21 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { CopyableText } from '@/components/ui/CopyableText';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useRoute, useUpdateRoute, useDeleteRoute } from '@/hooks/useRoutes';
+import { useGateways } from '@/hooks/useGateways';
+import { useNodeGroups } from '@/hooks/useNodeGroups';
+import { useTenants } from '@/hooks/useTenants';
 import { routeSchema, type RouteFormData } from '@/lib/schemas';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowRightLeft, ArrowLeft, Pencil, Trash2, Info } from 'lucide-react';
-
-const routeFields: FieldConfig<RouteFormData>[] = [
-  { name: 'name', label: 'Name', placeholder: 'web-proxy-route' },
-  {
-    name: 'protocol',
-    label: 'Protocol',
-    type: 'select',
-    options: [
-      { label: 'TCP', value: 'tcp' },
-      { label: 'UDP', value: 'udp' },
-      { label: 'ICMP', value: 'icmp' },
-      { label: 'All', value: 'all' },
-    ],
-  },
-  { name: 'entry_ip', label: 'Entry IP', placeholder: '203.0.113.1' },
-  { name: 'entry_port', label: 'Entry Port', type: 'number', placeholder: '443' },
-  { name: 'gateway_id', label: 'Gateway ID', placeholder: 'Gateway UUID' },
-  { name: 'destination_ip', label: 'Destination IP', placeholder: '10.0.1.5' },
-  { name: 'destination_port', label: 'Destination Port', type: 'number', placeholder: '8443' },
-  { name: 'node_group_id', label: 'Node Group ID', placeholder: 'Optional' },
-];
+import { formatDistanceToNow } from 'date-fns';
 
 export default function RouteDetailPage() {
   const { id } = useParams();
@@ -39,6 +23,48 @@ export default function RouteDetailPage() {
   const { data: route, isLoading, error } = useRoute(id);
   const updateRoute = useUpdateRoute();
   const deleteRoute = useDeleteRoute();
+
+  const { data: gatewaysData } = useGateways();
+  const { data: nodeGroupsData } = useNodeGroups();
+  const { data: tenantsData } = useTenants();
+
+  const gatewayOptions = useMemo(
+    () => (gatewaysData?.items || []).map((gw) => ({ label: gw.name, value: gw.id, description: gw.id.slice(0, 8) + '...' })),
+    [gatewaysData],
+  );
+  const nodeGroupOptions = useMemo(
+    () => (nodeGroupsData?.items || []).map((ng) => ({ label: ng.name, value: ng.id, description: ng.id.slice(0, 8) + '...' })),
+    [nodeGroupsData],
+  );
+  const gatewayMap = useMemo(
+    () => Object.fromEntries((gatewaysData?.items || []).map((gw) => [gw.id, gw.name])),
+    [gatewaysData],
+  );
+  const tenantMap = useMemo(
+    () => Object.fromEntries((tenantsData?.items || []).map((t) => [t.id, t.name])),
+    [tenantsData],
+  );
+
+  const routeFields: FieldConfig<RouteFormData>[] = [
+    { name: 'name', label: 'Name', placeholder: 'web-proxy-route' },
+    {
+      name: 'protocol',
+      label: 'Protocol',
+      type: 'select',
+      options: [
+        { label: 'TCP', value: 'tcp' },
+        { label: 'UDP', value: 'udp' },
+        { label: 'ICMP', value: 'icmp' },
+        { label: 'All', value: 'all' },
+      ],
+    },
+    { name: 'entry_ip', label: 'Entry IP', placeholder: '203.0.113.1' },
+    { name: 'entry_port', label: 'Entry Port', type: 'number', placeholder: '443' },
+    { name: 'gateway_id', label: 'Gateway', type: 'combobox', comboboxOptions: gatewayOptions, placeholder: 'Select a gateway...' },
+    { name: 'destination_ip', label: 'Destination IP', placeholder: '10.0.1.5' },
+    { name: 'destination_port', label: 'Destination Port', type: 'number', placeholder: '8443' },
+    { name: 'node_group_id', label: 'Node Group', type: 'combobox', comboboxOptions: nodeGroupOptions, placeholder: 'Select a node group...', clearable: true },
+  ];
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -119,12 +145,16 @@ export default function RouteDetailPage() {
             <CardTitle className="text-base">Route Configuration</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <InfoRow label="ID" value={route.id} mono />
-            <InfoRow label="Name" value={route.name} />
-            <InfoRow label="Protocol" value={route.protocol.toUpperCase()} />
-            <InfoRow label="Entry IP" value={route.exposedIp} mono />
-            <InfoRow label="Destination" value={route.privateDestination} mono />
-            <InfoRow label="Gateway ID" value={route.gatewayId} mono />
+            <InfoRow label="ID"><CopyableText value={route.id} /></InfoRow>
+            <InfoRow label="Name">{route.name}</InfoRow>
+            <InfoRow label="Protocol">{route.protocol.toUpperCase()}</InfoRow>
+            <InfoRow label="Entry IP"><CopyableText value={route.exposedIp} /></InfoRow>
+            <InfoRow label="Destination"><CopyableText value={route.privateDestination} /></InfoRow>
+            <InfoRow label="Gateway">
+              <Link to={`/gateways/${route.gatewayId}`} className="text-primary hover:underline text-sm">
+                {gatewayMap[route.gatewayId] || route.gatewayId}
+              </Link>
+            </InfoRow>
           </CardContent>
         </Card>
 
@@ -133,9 +163,15 @@ export default function RouteDetailPage() {
             <CardTitle className="text-base">Metadata</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <InfoRow label="Status" value={route.status} />
-            <InfoRow label="Tenant ID" value={route.tenantId} mono />
-            <InfoRow label="Created" value={new Date(route.createdAt).toLocaleDateString()} />
+            <InfoRow label="Status"><StatusBadge status={route.status} size="sm" /></InfoRow>
+            <InfoRow label="Tenant">
+              <Link to={`/tenants/${route.tenantId}`} className="text-primary hover:underline text-sm">
+                {tenantMap[route.tenantId] || route.tenantId}
+              </Link>
+            </InfoRow>
+            <InfoRow label="Created">
+              {formatDistanceToNow(new Date(route.createdAt), { addSuffix: true })}
+            </InfoRow>
           </CardContent>
         </Card>
       </div>
@@ -177,11 +213,11 @@ export default function RouteDetailPage() {
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`text-sm ${mono ? 'mono-data' : ''}`}>{value}</span>
+      <span className="text-sm">{children}</span>
     </div>
   );
 }

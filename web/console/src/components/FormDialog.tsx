@@ -25,13 +25,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { ResourceCombobox, type ComboboxOption } from '@/components/ui/ResourceCombobox';
 
 export interface FieldConfig<T extends FieldValues> {
   name: Path<T>;
   label: string;
-  type?: 'text' | 'number' | 'email' | 'password' | 'select' | 'textarea' | 'switch';
+  type?: 'text' | 'number' | 'email' | 'password' | 'select' | 'textarea' | 'switch' | 'combobox';
   placeholder?: string;
   options?: { label: string; value: string }[];
+  comboboxOptions?: ComboboxOption[];
+  clearable?: boolean;
   description?: string;
   visibleWhen?: { field: Path<T>; value: unknown };
 }
@@ -117,7 +120,16 @@ export function FormDialog<T extends FieldValues>({
                 ) : (
                   <>
                     <Label htmlFor={field.name}>{field.label}</Label>
-                    {field.type === 'select' ? (
+                    {field.type === 'combobox' ? (
+                      <ResourceCombobox
+                        options={field.comboboxOptions || []}
+                        value={(form.watch(field.name) as string) || ''}
+                        onValueChange={(value) => form.setValue(field.name, value as T[Path<T>])}
+                        placeholder={field.placeholder || `Select ${field.label.toLowerCase()}...`}
+                        searchPlaceholder={`Search ${field.label.toLowerCase()}...`}
+                        clearable={field.clearable}
+                      />
+                    ) : field.type === 'select' ? (
                       <Select
                         value={form.watch(field.name) as string}
                         onValueChange={(value) => form.setValue(field.name, value as T[Path<T>])}

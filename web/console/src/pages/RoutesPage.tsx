@@ -1,18 +1,22 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormDialog, type FieldConfig } from '@/components/FormDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useRoutes, useCreateRoute, useDeleteRoute } from '@/hooks/useRoutes';
+import { useGateways } from '@/hooks/useGateways';
+import { useNodeGroups } from '@/hooks/useNodeGroups';
 import { useAuth } from '@/hooks/useAuth';
 import { routeSchema, type RouteFormData } from '@/lib/schemas';
 import type { Route } from '@/types';
 import { ArrowRightLeft, MoreHorizontal, Trash2, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,27 +24,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-const routeFields: FieldConfig<RouteFormData>[] = [
-  { name: 'name', label: 'Name', placeholder: 'web-proxy-route' },
-  {
-    name: 'protocol',
-    label: 'Protocol',
-    type: 'select',
-    options: [
-      { label: 'TCP', value: 'tcp' },
-      { label: 'UDP', value: 'udp' },
-      { label: 'ICMP', value: 'icmp' },
-      { label: 'All', value: 'all' },
-    ],
-  },
-  { name: 'entry_ip', label: 'Entry IP', placeholder: '203.0.113.1' },
-  { name: 'entry_port', label: 'Entry Port', type: 'number', placeholder: '443' },
-  { name: 'gateway_id', label: 'Gateway ID', placeholder: 'Gateway UUID' },
-  { name: 'destination_ip', label: 'Destination IP', placeholder: '10.0.1.5' },
-  { name: 'destination_port', label: 'Destination Port', type: 'number', placeholder: '8443' },
-  { name: 'node_group_id', label: 'Node Group ID', placeholder: 'Optional' },
-];
 
 export default function RoutesPage() {
   const navigate = useNavigate();
@@ -51,8 +34,73 @@ export default function RoutesPage() {
   const createRoute = useCreateRoute(tenantId);
   const deleteRoute = useDeleteRoute();
 
+  const { data: gatewaysData } = useGateways();
+  const { data: nodeGroupsData } = useNodeGroups();
+
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Route | null>(null);
+
+  const gatewayOptions = useMemo(
+    () =>
+      (gatewaysData?.items || []).map((gw) => ({
+        value: gw.id,
+        label: gw.name,
+        description: gw.id.slice(0, 8) + '...',
+      })),
+    [gatewaysData],
+  );
+
+  const nodeGroupOptions = useMemo(
+    () =>
+      (nodeGroupsData?.items || []).map((ng) => ({
+        value: ng.id,
+        label: ng.name,
+        description: ng.id.slice(0, 8) + '...',
+      })),
+    [nodeGroupsData],
+  );
+
+  const gatewayMap = useMemo(
+    () =>
+      Object.fromEntries(
+        (gatewaysData?.items || []).map((gw) => [gw.id, gw.name]),
+      ),
+    [gatewaysData],
+  );
+
+  const routeFields: FieldConfig<RouteFormData>[] = [
+    { name: 'name', label: 'Name', placeholder: 'web-proxy-route' },
+    {
+      name: 'protocol',
+      label: 'Protocol',
+      type: 'select',
+      options: [
+        { label: 'TCP', value: 'tcp' },
+        { label: 'UDP', value: 'udp' },
+        { label: 'ICMP', value: 'icmp' },
+        { label: 'All', value: 'all' },
+      ],
+    },
+    { name: 'entry_ip', label: 'Entry IP', placeholder: '203.0.113.1' },
+    { name: 'entry_port', label: 'Entry Port', type: 'number', placeholder: '443' },
+    {
+      name: 'gateway_id',
+      label: 'Gateway',
+      type: 'combobox',
+      comboboxOptions: gatewayOptions,
+      placeholder: 'Select a gateway...',
+    },
+    { name: 'destination_ip', label: 'Destination IP', placeholder: '10.0.1.5' },
+    { name: 'destination_port', label: 'Destination Port', type: 'number', placeholder: '8443' },
+    {
+      name: 'node_group_id',
+      label: 'Node Group',
+      type: 'combobox',
+      comboboxOptions: nodeGroupOptions,
+      placeholder: 'Select a node group...',
+      clearable: true,
+    },
+  ];
 
   const columns: Column<Route>[] = [
     {
@@ -76,6 +124,15 @@ export default function RoutesPage() {
       render: (r) => <code className="mono-data text-sm">{r.privateDestination}</code>,
     },
     {
+      key: 'gatewayId',
+      header: 'Gateway',
+      render: (r) => (
+        <span className="text-sm text-foreground">
+          {gatewayMap[r.gatewayId] || r.gatewayId?.slice(0, 8) + '...'}
+        </span>
+      ),
+    },
+    {
       key: 'status',
       header: 'Status',
       render: (r) => <StatusBadge status={r.status} size="sm" />,
@@ -83,7 +140,11 @@ export default function RoutesPage() {
     {
       key: 'createdAt',
       header: 'Created',
-      render: (r) => <span className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString()}</span>,
+      render: (r) => (
+        <span className="text-sm text-muted-foreground">
+          {formatDistanceToNow(new Date(r.createdAt), { addSuffix: true })}
+        </span>
+      ),
     },
     {
       key: 'actions',
@@ -124,6 +185,16 @@ export default function RoutesPage() {
 
       {isLoading ? (
         <Skeleton className="h-96" />
+      ) : routes.length === 0 ? (
+        <EmptyState
+          icon={ArrowRightLeft}
+          title="No routes configured"
+          description="Create a route to define private traffic paths through your gateways."
+          action={{
+            label: 'Create Route',
+            onClick: () => setCreateOpen(true),
+          }}
+        />
       ) : (
         <DataTable
           data={routes}
