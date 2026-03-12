@@ -280,14 +280,26 @@ func (c *Config) validateController() error {
 	if c.Controller.Storage.DSN == "" {
 		return fmt.Errorf("controller.storage.dsn is required")
 	}
-	// Validate encryption key format: must be valid base64 decoding to 32 bytes (AES-256).
-	if c.Controller.Secrets.EncryptionKey != "" {
-		decoded, err := base64.StdEncoding.DecodeString(c.Controller.Secrets.EncryptionKey)
+	// Validate encryption key: required, must be valid base64 decoding to 32 bytes (AES-256).
+	if c.Controller.Secrets.EncryptionKey == "" {
+		return fmt.Errorf("controller.secrets.encryption_key is required")
+	}
+	decoded, err := base64.StdEncoding.DecodeString(c.Controller.Secrets.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("controller.secrets.encryption_key: invalid base64: %w", err)
+	}
+	if len(decoded) != 32 {
+		return fmt.Errorf("controller.secrets.encryption_key: must decode to 32 bytes (AES-256), got %d", len(decoded))
+	}
+
+	// Validate token signing key if set: must be valid base64 decoding to ≥32 bytes.
+	if c.Controller.Secrets.TokenSigningKey != "" {
+		sigDecoded, err := base64.StdEncoding.DecodeString(c.Controller.Secrets.TokenSigningKey)
 		if err != nil {
-			return fmt.Errorf("controller.secrets.encryption_key: invalid base64: %w", err)
+			return fmt.Errorf("controller.secrets.token_signing_key: invalid base64: %w", err)
 		}
-		if len(decoded) != 32 {
-			return fmt.Errorf("controller.secrets.encryption_key: must decode to 32 bytes (AES-256), got %d", len(decoded))
+		if len(sigDecoded) < 32 {
+			return fmt.Errorf("controller.secrets.token_signing_key: must decode to at least 32 bytes, got %d", len(sigDecoded))
 		}
 	}
 	return nil

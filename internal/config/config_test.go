@@ -59,7 +59,7 @@ func TestValidateController_EncryptionKey_InvalidBase64(t *testing.T) {
 }
 
 func TestValidateController_EncryptionKey_Empty(t *testing.T) {
-	// Empty key should be allowed (secrets store will handle it).
+	// Empty key should now be rejected at validation time.
 	cfg := &Config{
 		Role: RoleController,
 		Controller: ControllerConfig{
@@ -68,8 +68,63 @@ func TestValidateController_EncryptionKey_Empty(t *testing.T) {
 			Secrets:    SecretsConfig{EncryptionKey: ""},
 		},
 	}
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for empty encryption_key, got nil")
+	}
+}
+
+func TestValidateController_TokenSigningKey_Valid(t *testing.T) {
+	validKey32 := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	cfg := &Config{
+		Role: RoleController,
+		Controller: ControllerConfig{
+			ListenAddr: ":8443",
+			Storage:    StorageConfig{Driver: "sqlite", DSN: "test.db"},
+			Secrets: SecretsConfig{
+				EncryptionKey:   validKey32,
+				TokenSigningKey: validKey32,
+			},
+		},
+	}
 	if err := cfg.Validate(); err != nil {
-		t.Errorf("expected valid config with empty key, got: %v", err)
+		t.Errorf("expected valid config, got: %v", err)
+	}
+}
+
+func TestValidateController_TokenSigningKey_TooShort(t *testing.T) {
+	validKey32 := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	shortKey := base64.StdEncoding.EncodeToString(make([]byte, 16))
+	cfg := &Config{
+		Role: RoleController,
+		Controller: ControllerConfig{
+			ListenAddr: ":8443",
+			Storage:    StorageConfig{Driver: "sqlite", DSN: "test.db"},
+			Secrets: SecretsConfig{
+				EncryptionKey:   validKey32,
+				TokenSigningKey: shortKey,
+			},
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for short token_signing_key, got nil")
+	}
+}
+
+func TestValidateController_TokenSigningKey_InvalidBase64(t *testing.T) {
+	validKey32 := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	cfg := &Config{
+		Role: RoleController,
+		Controller: ControllerConfig{
+			ListenAddr: ":8443",
+			Storage:    StorageConfig{Driver: "sqlite", DSN: "test.db"},
+			Secrets: SecretsConfig{
+				EncryptionKey:   validKey32,
+				TokenSigningKey: "not-valid-base64!!!",
+			},
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for invalid base64 token_signing_key, got nil")
 	}
 }
 

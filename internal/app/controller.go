@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -81,13 +82,18 @@ func RunController(cfg *config.Config) error {
 	authSvc := auth.NewService(store, store, secretStore, "EdgeFabric")
 
 	// Use a separate token signing key if configured; fall back to encryption key.
-	signingKey := cfg.Controller.Secrets.TokenSigningKey
-	if signingKey == "" {
-		signingKey = cfg.Controller.Secrets.EncryptionKey
+	// Both keys are base64-encoded in config; decode before use.
+	signingKeyB64 := cfg.Controller.Secrets.TokenSigningKey
+	if signingKeyB64 == "" {
+		signingKeyB64 = cfg.Controller.Secrets.EncryptionKey
 		logger.Warn("token_signing_key not set, using encryption_key (set separate key for production)")
 	}
+	signingKeyBytes, err := base64.StdEncoding.DecodeString(signingKeyB64)
+	if err != nil {
+		return fmt.Errorf("decode token signing key: %w", err)
+	}
 	tokenSvc := auth.NewTokenService(
-		[]byte(signingKey),
+		signingKeyBytes,
 		24*time.Hour,
 	)
 	tenantSvc := tenant.NewService(store)
