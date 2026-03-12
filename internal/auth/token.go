@@ -38,17 +38,22 @@ func (ts *TokenService) Issue(claims Claims) (string, error) {
 	now := time.Now().UTC()
 	expires := now.Add(ts.ttl)
 
-	// Encode payload: userID|tenantID|role|issuedAt|expiresAt
+	// Encode payload: userID|tenantID|role|issuedAt|expiresAt|mfaPending
 	tenantStr := ""
 	if claims.TenantID != nil {
 		tenantStr = claims.TenantID.String()
 	}
-	payload := fmt.Sprintf("%s|%s|%s|%d|%d",
+	mfaStr := "0"
+	if claims.MFAPending {
+		mfaStr = "1"
+	}
+	payload := fmt.Sprintf("%s|%s|%s|%d|%d|%s",
 		claims.UserID.String(),
 		tenantStr,
 		string(claims.Role),
 		now.Unix(),
 		expires.Unix(),
+		mfaStr,
 	)
 
 	payloadB64 := base64.RawURLEncoding.EncodeToString([]byte(payload))
@@ -85,8 +90,9 @@ func (ts *TokenService) Verify(token string) (*Claims, error) {
 	}
 	payload := string(payloadBytes)
 
-	fields := strings.SplitN(payload, "|", 5)
-	if len(fields) != 5 {
+	// Accept 5-field (legacy) or 6-field tokens.
+	fields := strings.Split(payload, "|")
+	if len(fields) != 5 && len(fields) != 6 {
 		return nil, fmt.Errorf("invalid token payload")
 	}
 
@@ -119,10 +125,17 @@ func (ts *TokenService) Verify(token string) (*Claims, error) {
 		return nil, fmt.Errorf("token has expired")
 	}
 
+	// Parse MFA pending flag (6th field); legacy 5-field tokens default to false.
+	mfaPending := false
+	if len(fields) == 6 && fields[5] == "1" {
+		mfaPending = true
+	}
+
 	return &Claims{
-		UserID:   userID,
-		TenantID: tenantID,
-		Role:     role,
+		UserID:     userID,
+		TenantID:   tenantID,
+		Role:       role,
+		MFAPending: mfaPending,
 	}, nil
 }
 

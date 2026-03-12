@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiLogin, apiVerifyTotp, apiGet, getToken, setToken, clearToken } from '@/lib/api';
+import { apiLogin, apiVerifyTotpWithToken, apiGet, getToken, setToken, clearToken } from '@/lib/api';
 import { transformUser } from '@/lib/transforms';
 import type { User } from '@/types';
 import type { ApiUser } from '@/types/api';
@@ -43,13 +43,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Holds the MFA-pending token in memory (not localStorage) until TOTP is verified.
+  const pendingTokenRef = useRef<string | null>(null);
+
   const login = useCallback(async (email: string, password: string) => {
     const resp = await apiLogin(email, password);
-    setToken(resp.token);
-    setTokenState(resp.token);
 
-    if (!resp.totp_required) {
-      // Fetch user profile
+    if (resp.totp_required) {
+      // Store MFA-pending token only in memory — do NOT persist to localStorage.
+      // The backend will reject this token on all endpoints except TOTP verify.
+      pendingTokenRef.current = resp.token;
+    } else {
+      // Full session — safe to persist.
+      setToken(resp.token);
+      setTokenState(resp.token);
+
       const apiUser = await apiGet<ApiUser>('/api/v1/auth/me');
       setUser(transformUser(apiUser));
     }
@@ -58,11 +66,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const verifyTotp = useCallback(async (code: string) => {
-    const resp = await apiVerifyTotp(code);
+    const pending = pendingTokenRef.current;
+    if (!pending) {
+      throw new Error('No pending MFA token — call login() first');
+    }
+
+    // Use the pending token explicitly for the TOTP verify call.
+    const resp = await apiVerifyTotpWithToken(code, pending);
+    pendingTokenRef.current = null;
+
+    // Now persist the fully-verified token.
     setToken(resp.token);
     setTokenState(resp.token);
 
-    // Fetch user profile after TOTP verification
+    // Fetch user profile after TOTP verification.
     const apiUser = await apiGet<ApiUser>('/api/v1/auth/me');
     setUser(transformUser(apiUser));
   }, []);

@@ -113,3 +113,59 @@ func TestTokenInvalidFormat(t *testing.T) {
 		t.Fatal("expected error for empty token")
 	}
 }
+
+func TestTokenMFAPending(t *testing.T) {
+	svc := auth.NewTokenService([]byte("test-signing-key-32-bytes-long!!"), time.Hour)
+
+	tenantID := domain.NewID()
+	claims := auth.Claims{
+		UserID:     domain.NewID(),
+		TenantID:   &tenantID,
+		Role:       domain.RoleAdmin,
+		MFAPending: true,
+	}
+
+	token, err := svc.Issue(claims)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	got, err := svc.Verify(token)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+
+	if !got.MFAPending {
+		t.Error("expected MFAPending=true in verified claims")
+	}
+	if got.UserID != claims.UserID {
+		t.Error("user_id mismatch")
+	}
+	if got.Role != domain.RoleAdmin {
+		t.Error("role mismatch")
+	}
+}
+
+func TestTokenMFANotPending(t *testing.T) {
+	svc := auth.NewTokenService([]byte("test-signing-key-32-bytes-long!!"), time.Hour)
+
+	claims := auth.Claims{
+		UserID:     domain.NewID(),
+		Role:       domain.RoleAdmin,
+		MFAPending: false,
+	}
+
+	token, err := svc.Issue(claims)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	got, err := svc.Verify(token)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+
+	if got.MFAPending {
+		t.Error("expected MFAPending=false in verified claims")
+	}
+}

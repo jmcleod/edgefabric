@@ -38,4 +38,8 @@ type Claims struct {
 	Role     domain.Role
 	// APIKeyID is set when authentication was via API key.
 	APIKeyID *domain.ID
+	// MFAPending is true when the user has passed password auth but not yet
+	// completed TOTP verification. Tokens with MFAPending=true must be
+	// restricted to MFA-related endpoints only.
+	MFAPending bool
 }

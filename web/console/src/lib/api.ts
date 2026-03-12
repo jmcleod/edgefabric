@@ -162,3 +162,24 @@ export async function apiVerifyTotp(code: string): Promise<{ token: string }> {
   });
   return resp.data as { token: string };
 }
+
+/** POST for TOTP verification using an explicit pending token (not stored in localStorage). */
+export async function apiVerifyTotpWithToken(code: string, pendingToken: string): Promise<{ token: string }> {
+  const response = await fetch('/api/v1/auth/totp/verify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${pendingToken}`,
+    },
+    body: JSON.stringify({ code }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json();
+    const err = body.error || { code: 'unknown', message: 'Request failed' };
+    throw new ApiError(response.status, err.code, err.message);
+  }
+
+  const body = await response.json();
+  return body.data as { token: string };
+}

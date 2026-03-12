@@ -87,6 +87,18 @@ func Auth(tokenSvc *auth.TokenService, authSvc auth.Service, opts ...AuthOption)
 				claims = c
 			}
 
+			// Block MFA-pending tokens from accessing anything except
+			// TOTP verification endpoints and the user profile.
+			if claims.MFAPending {
+				path := r.URL.Path
+				if path != "/api/v1/auth/totp/verify" &&
+					path != "/api/v1/auth/totp/confirm" &&
+					path != "/api/v1/auth/me" {
+					apiutil.WriteError(w, http.StatusForbidden, "mfa_required", "MFA verification required")
+					return
+				}
+			}
+
 			ctx := context.WithValue(r.Context(), claimsKey{}, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

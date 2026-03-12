@@ -99,11 +99,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// If TOTP is enabled, the client must complete a second factor.
 	if u.TOTPEnabled {
-		// Issue a token so the TOTP verify endpoint knows who is authenticating.
+		// Issue a restricted MFA-pending token. The auth middleware will block
+		// this token from accessing any endpoint except TOTP verification.
 		token, err := h.tokenSvc.Issue(auth.Claims{
-			UserID:   u.ID,
-			TenantID: u.TenantID,
-			Role:     u.Role,
+			UserID:     u.ID,
+			TenantID:   u.TenantID,
+			Role:       u.Role,
+			MFAPending: true,
 		})
 		if err != nil {
 			apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
@@ -187,8 +189,12 @@ func (h *AuthHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Issue a fresh full session token.
-	token, err := h.tokenSvc.Issue(*claims)
+	// Issue a fresh full session token with MFA completed.
+	token, err := h.tokenSvc.Issue(auth.Claims{
+		UserID:   claims.UserID,
+		TenantID: claims.TenantID,
+		Role:     claims.Role,
+	})
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
 		return
