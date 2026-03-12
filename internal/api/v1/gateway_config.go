@@ -30,8 +30,10 @@ func NewGatewayConfigHandler(routeSvc route.Service, gatewayStore storage.Gatewa
 // Register mounts gateway config routes on the mux.
 func (h *GatewayConfigHandler) Register(mux *http.ServeMux, authMW func(http.Handler) http.Handler) {
 	requireRead := middleware.RequirePermission(h.authorizer, rbac.ActionRead, rbac.ResourceGateway, middleware.TenantFromClaims())
+	// Enrollment tokens (readonly, UserID = gatewayID) may only access their own config.
+	requireOwner := middleware.RequireResourceOwnerOrAdmin("id")
 
-	mux.Handle("GET /api/v1/gateways/{id}/config/routes", middleware.Chain(http.HandlerFunc(h.GetRouteConfig), authMW, requireRead))
+	mux.Handle("GET /api/v1/gateways/{id}/config/routes", middleware.Chain(http.HandlerFunc(h.GetRouteConfig), authMW, requireRead, requireOwner))
 }
 
 // GetRouteConfig handles GET /api/v1/gateways/{id}/config/routes.

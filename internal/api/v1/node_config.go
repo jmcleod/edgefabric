@@ -36,12 +36,15 @@ func NewNodeConfigHandler(svc networking.Service, dnsSvc dns.Service, cdnSvc cdn
 // Register mounts node config routes on the mux.
 func (h *NodeConfigHandler) Register(mux *http.ServeMux, authMW func(http.Handler) http.Handler) {
 	requireRead := middleware.RequirePermission(h.authorizer, rbac.ActionRead, rbac.ResourceNode, middleware.TenantFromClaims())
+	// Enrollment tokens (readonly, UserID = nodeID) may only access their own config.
+	// Admins and superusers bypass this check.
+	requireOwner := middleware.RequireResourceOwnerOrAdmin("id")
 
-	mux.Handle("GET /api/v1/nodes/{id}/config/wireguard", middleware.Chain(http.HandlerFunc(h.GetWireGuardConfig), authMW, requireRead))
-	mux.Handle("GET /api/v1/nodes/{id}/config/bgp", middleware.Chain(http.HandlerFunc(h.GetBGPConfig), authMW, requireRead))
-	mux.Handle("GET /api/v1/nodes/{id}/config/dns", middleware.Chain(http.HandlerFunc(h.GetDNSConfig), authMW, requireRead))
-	mux.Handle("GET /api/v1/nodes/{id}/config/cdn", middleware.Chain(http.HandlerFunc(h.GetCDNConfig), authMW, requireRead))
-	mux.Handle("GET /api/v1/nodes/{id}/config/routes", middleware.Chain(http.HandlerFunc(h.GetRouteConfig), authMW, requireRead))
+	mux.Handle("GET /api/v1/nodes/{id}/config/wireguard", middleware.Chain(http.HandlerFunc(h.GetWireGuardConfig), authMW, requireRead, requireOwner))
+	mux.Handle("GET /api/v1/nodes/{id}/config/bgp", middleware.Chain(http.HandlerFunc(h.GetBGPConfig), authMW, requireRead, requireOwner))
+	mux.Handle("GET /api/v1/nodes/{id}/config/dns", middleware.Chain(http.HandlerFunc(h.GetDNSConfig), authMW, requireRead, requireOwner))
+	mux.Handle("GET /api/v1/nodes/{id}/config/cdn", middleware.Chain(http.HandlerFunc(h.GetCDNConfig), authMW, requireRead, requireOwner))
+	mux.Handle("GET /api/v1/nodes/{id}/config/routes", middleware.Chain(http.HandlerFunc(h.GetRouteConfig), authMW, requireRead, requireOwner))
 }
 
 // GetWireGuardConfig handles GET /api/v1/nodes/{id}/config/wireguard.
