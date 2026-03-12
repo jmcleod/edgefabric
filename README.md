@@ -12,7 +12,7 @@ A distributed edge networking platform that orchestrates a global fleet of nodes
 - **WireGuard Mesh** — Automatic overlay network between controller, nodes, and gateways with encrypted tunnels and key management
 - **BGP Anycast** — Announce IP prefixes via BGP from globally distributed nodes for geographic load distribution
 - **Authoritative DNS** — Centrally managed DNS zones (A, AAAA, CNAME, MX, TXT, SRV, CAA, NS, PTR) served from edge nodes
-- **CDN** — Reverse proxy with caching (memory + disk), TLS termination (auto/manual/disabled), gzip + brotli compression, WAF, rate limiting, and origin health checks
+- **CDN** — Reverse proxy with caching (memory + disk), TLS termination (auto via ACME / disabled; manual certificate upload planned), gzip + brotli compression, WAF, rate limiting, and origin health checks
 - **Route Forwarding** — TCP/UDP/ICMP forwarding through gateways into private networks
 - **Multi-tenant** — Isolated tenants with role-based access control (superuser, admin, readonly) and per-tenant observability
 - **Provisioning** — SSH-based node enrollment, start/stop/restart/upgrade/decommission lifecycle
