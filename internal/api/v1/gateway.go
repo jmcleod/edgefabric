@@ -49,6 +49,12 @@ func (h *GatewayHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Non-superusers must create gateways in their own tenant.
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims.TenantID != nil {
+		req.TenantID = *claims.TenantID
+	}
+
 	gw, err := h.svc.CreateGateway(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, storage.ErrAlreadyExists) {
@@ -59,7 +65,6 @@ func (h *GatewayHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := middleware.ClaimsFromContext(r.Context())
 	h.audit.Log(r.Context(), audit.Event{
 		TenantID: claims.TenantID,
 		UserID:   &claims.UserID,
@@ -87,6 +92,13 @@ func (h *GatewayHandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get gateway")
+		return
+	}
+
+	// Tenant isolation: non-superuser can only see gateways in their tenant.
+	claims := middleware.ClaimsFromContext(r.Context())
+	if !apiutil.CanAccessTenantVal(claims, gw.TenantID) {
+		apiutil.WriteError(w, http.StatusNotFound, "not_found", "gateway not found")
 		return
 	}
 
@@ -121,6 +133,22 @@ func (h *GatewayHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Tenant isolation: verify the caller owns this gateway before updating.
+	claims := middleware.ClaimsFromContext(r.Context())
+	existing, err := h.svc.GetGateway(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "gateway not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get gateway")
+		return
+	}
+	if !apiutil.CanAccessTenantVal(claims, existing.TenantID) {
+		apiutil.WriteError(w, http.StatusNotFound, "not_found", "gateway not found")
+		return
+	}
+
 	var req fleet.UpdateGatewayRequest
 	if err := apiutil.Decode(r, &req); err != nil {
 		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -136,8 +164,6 @@ func (h *GatewayHandler) Update(w http.ResponseWriter, r *http.Request) {
 		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-
-	claims := middleware.ClaimsFromContext(r.Context())
 	h.audit.Log(r.Context(), audit.Event{
 		TenantID: claims.TenantID,
 		UserID:   &claims.UserID,
@@ -158,6 +184,22 @@ func (h *GatewayHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Tenant isolation: verify the caller owns this gateway before deleting.
+	claims := middleware.ClaimsFromContext(r.Context())
+	existing, err := h.svc.GetGateway(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "gateway not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get gateway")
+		return
+	}
+	if !apiutil.CanAccessTenantVal(claims, existing.TenantID) {
+		apiutil.WriteError(w, http.StatusNotFound, "not_found", "gateway not found")
+		return
+	}
+
 	if err := h.svc.DeleteGateway(r.Context(), id); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			apiutil.WriteError(w, http.StatusNotFound, "not_found", "gateway not found")
@@ -166,8 +208,6 @@ func (h *GatewayHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to delete gateway")
 		return
 	}
-
-	claims := middleware.ClaimsFromContext(r.Context())
 	h.audit.Log(r.Context(), audit.Event{
 		TenantID: claims.TenantID,
 		UserID:   &claims.UserID,
@@ -185,6 +225,22 @@ func (h *GatewayHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	id, err := apiutil.ParseID(r, "id")
 	if err != nil {
 		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	// Tenant isolation.
+	claims := middleware.ClaimsFromContext(r.Context())
+	gw, err := h.svc.GetGateway(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "gateway not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get gateway")
+		return
+	}
+	if !apiutil.CanAccessTenantVal(claims, gw.TenantID) {
+		apiutil.WriteError(w, http.StatusNotFound, "not_found", "gateway not found")
 		return
 	}
 

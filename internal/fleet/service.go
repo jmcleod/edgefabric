@@ -43,13 +43,14 @@ type Service interface {
 
 // CreateNodeRequest holds the input for creating a node.
 type CreateNodeRequest struct {
-	Name     string `json:"name"`
-	Hostname string `json:"hostname"`
-	PublicIP string `json:"public_ip"`
-	Region   string `json:"region,omitempty"`
-	Provider string `json:"provider,omitempty"`
-	SSHPort  int    `json:"ssh_port"`
-	SSHUser  string `json:"ssh_user"`
+	TenantID *domain.ID `json:"tenant_id,omitempty"`
+	Name     string     `json:"name"`
+	Hostname string     `json:"hostname"`
+	PublicIP string     `json:"public_ip"`
+	Region   string     `json:"region,omitempty"`
+	Provider string     `json:"provider,omitempty"`
+	SSHPort  int        `json:"ssh_port"`
+	SSHUser  string     `json:"ssh_user"`
 }
 
 // UpdateNodeRequest holds the input for updating a node.

@@ -49,6 +49,12 @@ func (h *NodeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Non-superusers must create nodes in their own tenant.
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims.TenantID != nil {
+		req.TenantID = claims.TenantID
+	}
+
 	n, err := h.svc.CreateNode(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, storage.ErrAlreadyExists) {
@@ -59,7 +65,6 @@ func (h *NodeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := middleware.ClaimsFromContext(r.Context())
 	h.audit.Log(r.Context(), audit.Event{
 		TenantID: claims.TenantID,
 		UserID:   &claims.UserID,
@@ -92,7 +97,7 @@ func (h *NodeHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Tenant isolation: non-superuser can only see nodes in their tenant.
 	claims := middleware.ClaimsFromContext(r.Context())
-	if claims.TenantID != nil && n.TenantID != nil && *claims.TenantID != *n.TenantID {
+	if !apiutil.CanAccessTenant(claims, n.TenantID) {
 		apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
 		return
 	}
@@ -136,6 +141,22 @@ func (h *NodeHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Tenant isolation: verify the caller owns this node before updating.
+	claims := middleware.ClaimsFromContext(r.Context())
+	existing, err := h.svc.GetNode(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get node")
+		return
+	}
+	if !apiutil.CanAccessTenant(claims, existing.TenantID) {
+		apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
+		return
+	}
+
 	var req fleet.UpdateNodeRequest
 	if err := apiutil.Decode(r, &req); err != nil {
 		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -152,7 +173,6 @@ func (h *NodeHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := middleware.ClaimsFromContext(r.Context())
 	h.audit.Log(r.Context(), audit.Event{
 		TenantID: claims.TenantID,
 		UserID:   &claims.UserID,
@@ -173,6 +193,22 @@ func (h *NodeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Tenant isolation: verify the caller owns this node before deleting.
+	claims := middleware.ClaimsFromContext(r.Context())
+	existing, err := h.svc.GetNode(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get node")
+		return
+	}
+	if !apiutil.CanAccessTenant(claims, existing.TenantID) {
+		apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
+		return
+	}
+
 	if err := h.svc.DeleteNode(r.Context(), id); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
@@ -182,7 +218,6 @@ func (h *NodeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := middleware.ClaimsFromContext(r.Context())
 	h.audit.Log(r.Context(), audit.Event{
 		TenantID: claims.TenantID,
 		UserID:   &claims.UserID,
@@ -200,6 +235,22 @@ func (h *NodeHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	id, err := apiutil.ParseID(r, "id")
 	if err != nil {
 		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	// Tenant isolation.
+	claims := middleware.ClaimsFromContext(r.Context())
+	n, err := h.svc.GetNode(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
+			return
+		}
+		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get node")
+		return
+	}
+	if !apiutil.CanAccessTenant(claims, n.TenantID) {
+		apiutil.WriteError(w, http.StatusNotFound, "not_found", "node not found")
 		return
 	}
 

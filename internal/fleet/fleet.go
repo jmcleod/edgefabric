@@ -68,6 +68,7 @@ func (s *DefaultService) CreateNode(ctx context.Context, req CreateNodeRequest) 
 
 	n := &domain.Node{
 		ID:       domain.NewID(),
+		TenantID: req.TenantID,
 		Name:     req.Name,
 		Hostname: req.Hostname,
 		PublicIP:  req.PublicIP,
