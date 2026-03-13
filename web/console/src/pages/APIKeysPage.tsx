@@ -164,8 +164,8 @@ export default function APIKeysPage() {
           const result = await createKey.mutateAsync(data);
           setCreateOpen(false);
           // Show the key once — it cannot be retrieved later
-          if (result && typeof result === 'object' && 'key' in result) {
-            setNewKey((result as { key: string }).key);
+          if (result?.raw_key) {
+            setNewKey(result.raw_key);
           }
         }}
         isSubmitting={createKey.isPending}

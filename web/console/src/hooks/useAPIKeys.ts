@@ -18,7 +18,7 @@ export function useAPIKeys(params?: { limit?: number; offset?: number }) {
 }
 
 export function useCreateAPIKey() {
-  return useCreateMutation<APIKeyFormData, { id: string; key: string }>('/api/v1/api-keys', {
+  return useCreateMutation<APIKeyFormData, { raw_key: string; api_key: ApiAPIKey }>('/api/v1/api-keys', {
     invalidateKeys: [['apiKeys']],
     successMessage: 'API key created',
   });
