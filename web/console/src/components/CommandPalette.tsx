@@ -75,10 +75,22 @@ const tenantRoutes: CommandRoute[] = [
   { label: 'Profile', path: '/profile', icon: UserCircle, keywords: 'account password totp' },
 ];
 
+// Module-level opener so other components (e.g. AppHeader) can trigger the palette.
+let openPaletteFn: (() => void) | null = null;
+export function openCommandPalette() {
+  openPaletteFn?.();
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Register the opener so external callers can open the palette.
+  useEffect(() => {
+    openPaletteFn = () => setOpen(true);
+    return () => { openPaletteFn = null; };
+  }, []);
 
   const isSuperUser = user?.role === 'superuser';
   const routes = isSuperUser ? superuserRoutes : tenantRoutes;

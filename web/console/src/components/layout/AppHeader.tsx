@@ -1,6 +1,5 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,10 +8,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Bell, Search, ChevronDown, LogOut, Settings, User } from 'lucide-react';
+import { Search, ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { openCommandPalette } from '@/components/CommandPalette';
 
 interface AppHeaderProps {
   title?: string;
@@ -21,6 +22,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ title, breadcrumbs }: AppHeaderProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -46,23 +48,20 @@ export function AppHeader({ title, breadcrumbs }: AppHeaderProps) {
 
       <div className="flex-1" />
 
-      {/* Search */}
-      <div className="relative hidden w-64 lg:block">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search nodes, zones, services..."
-          className="h-9 bg-muted border-0 pl-9 text-sm placeholder:text-muted-foreground/60"
-        />
-      </div>
+      {/* Search — opens command palette */}
+      <button
+        onClick={openCommandPalette}
+        className="hidden lg:flex items-center gap-2 w-64 h-9 rounded-md bg-muted px-3 text-sm text-muted-foreground/60 hover:bg-muted/80 transition-colors"
+      >
+        <Search className="h-4 w-4 shrink-0" />
+        <span className="flex-1 text-left">Search...</span>
+        <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:flex">
+          <span className="text-xs">&#8984;</span>K
+        </kbd>
+      </button>
 
       {/* Theme Toggle */}
       <ThemeToggle />
-
-      {/* Notifications */}
-      <Button variant="ghost" size="icon" className="relative">
-        <Bell className="h-4 w-4" />
-        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-status-warning" />
-      </Button>
 
       {/* User Menu */}
       {user && (
@@ -82,11 +81,11 @@ export function AppHeader({ title, breadcrumbs }: AppHeaderProps) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/profile')}>
               <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>
