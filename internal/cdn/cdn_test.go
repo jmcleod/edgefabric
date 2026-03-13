@@ -155,7 +155,7 @@ func TestCreateOrigin_HappyPath(t *testing.T) {
 
 	origin, err := svc.CreateOrigin(ctx, cdn.CreateOriginRequest{
 		SiteID:          site.ID,
-		Address:         "backend.example.com:443",
+		Address:         "93.184.216.34:443",
 		Scheme:          domain.CDNOriginHTTPS,
 		Weight:          10,
 		HealthCheckPath: "/healthz",
@@ -163,8 +163,8 @@ func TestCreateOrigin_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create origin: %v", err)
 	}
-	if origin.Address != "backend.example.com:443" {
-		t.Errorf("expected address backend.example.com:443, got %s", origin.Address)
+	if origin.Address != "93.184.216.34:443" {
+		t.Errorf("expected address 93.184.216.34:443, got %s", origin.Address)
 	}
 	if origin.Weight != 10 {
 		t.Errorf("expected weight 10, got %d", origin.Weight)
@@ -175,7 +175,7 @@ func TestCreateOrigin_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get origin: %v", err)
 	}
-	if got.Address != "backend.example.com:443" {
+	if got.Address != "93.184.216.34:443" {
 		t.Errorf("expected address, got %s", got.Address)
 	}
 }
@@ -241,7 +241,7 @@ func TestGetNodeCDNConfig(t *testing.T) {
 	// Create origins.
 	_, err = svc.CreateOrigin(ctx, cdn.CreateOriginRequest{
 		SiteID:  site.ID,
-		Address: "backend1.test.com:443",
+		Address: "93.184.216.34:443",
 		Scheme:  domain.CDNOriginHTTPS,
 		Weight:  10,
 	})
@@ -250,7 +250,7 @@ func TestGetNodeCDNConfig(t *testing.T) {
 	}
 	_, err = svc.CreateOrigin(ctx, cdn.CreateOriginRequest{
 		SiteID:  site.ID,
-		Address: "backend2.test.com:443",
+		Address: "93.184.216.35:443",
 		Scheme:  domain.CDNOriginHTTPS,
 		Weight:  5,
 	})
@@ -443,7 +443,7 @@ func TestListOrigins(t *testing.T) {
 		TLSMode:  domain.TLSModeDisabled,
 	})
 
-	for _, addr := range []string{"a.com", "b.com", "c.com"} {
+	for _, addr := range []string{"93.184.216.34", "93.184.216.35", "93.184.216.36"} {
 		_, err := svc.CreateOrigin(ctx, cdn.CreateOriginRequest{
 			SiteID:  site.ID,
 			Address: addr,

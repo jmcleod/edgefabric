@@ -53,7 +53,7 @@ func TestCDNIntegration_FullLifecycle(t *testing.T) {
 	// Step 3: Create origins for the site.
 	origin1, err := svc.CreateOrigin(ctx, cdn.CreateOriginRequest{
 		SiteID:          site.ID,
-		Address:         "backend1.example.com:443",
+		Address:         "93.184.216.34:443",
 		Scheme:          domain.CDNOriginHTTPS,
 		Weight:          10,
 		HealthCheckPath: "/healthz",
@@ -64,7 +64,7 @@ func TestCDNIntegration_FullLifecycle(t *testing.T) {
 
 	origin2, err := svc.CreateOrigin(ctx, cdn.CreateOriginRequest{
 		SiteID:  site.ID,
-		Address: "backend2.example.com:443",
+		Address: "93.184.216.35:443",
 		Scheme:  domain.CDNOriginHTTPS,
 		Weight:  5,
 	})
@@ -408,7 +408,7 @@ func TestCDNIntegration_OriginDefaultWeight(t *testing.T) {
 	// Create origin without specifying weight.
 	origin, err := svc.CreateOrigin(ctx, cdn.CreateOriginRequest{
 		SiteID:  site.ID,
-		Address: "origin.example.com",
+		Address: "93.184.216.36",
 		Scheme:  domain.CDNOriginHTTPS,
 	})
 	if err != nil {
@@ -434,13 +434,13 @@ func TestCDNIntegration_UpdateOrigin(t *testing.T) {
 
 	origin, _ := svc.CreateOrigin(ctx, cdn.CreateOriginRequest{
 		SiteID:  site.ID,
-		Address: "old.example.com:443",
+		Address: "93.184.216.37:443",
 		Scheme:  domain.CDNOriginHTTPS,
 		Weight:  5,
 	})
 
 	// Update address and weight.
-	newAddr := "new.example.com:8443"
+	newAddr := "93.184.216.38:8443"
 	newWeight := 20
 	newScheme := domain.CDNOriginHTTP
 	newStatus := domain.CDNOriginHealthy
@@ -453,7 +453,7 @@ func TestCDNIntegration_UpdateOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update origin: %v", err)
 	}
-	if updated.Address != "new.example.com:8443" {
+	if updated.Address != "93.184.216.38:8443" {
 		t.Errorf("expected new address, got %s", updated.Address)
 	}
 	if updated.Weight != 20 {
