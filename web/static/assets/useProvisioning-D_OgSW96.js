@@ -1,0 +1,1 @@
+import{u as r}from"./useQuery-BD4Ggo9T.js";import{k as n,M as e}from"./index-zHvwFt2i.js";function a(s,i){return r({queryKey:["provisioningJobs",s,i],queryFn:async()=>{const o=await n(`/api/v1/nodes/${s}/jobs`,i);return{...o,items:o.items.map(e)}},enabled:!!s})}export{a as u};

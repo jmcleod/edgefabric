@@ -1,0 +1,1 @@
+import{u as i}from"./useQuery-BD4Ggo9T.js";import{k as s,m as t}from"./index-zHvwFt2i.js";function n(r){return i({queryKey:["wireguardPeers",r],queryFn:async()=>{const e={limit:100};r&&(e.owner_id=r);const a=await s("/api/v1/wireguard/peers",e);return{...a,items:a.items.map(t)}},enabled:r!==void 0})}export{n as u};
