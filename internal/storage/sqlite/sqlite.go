@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	_ "modernc.org/sqlite" // Register SQLite driver as "sqlite".
 
@@ -47,6 +48,15 @@ func New(dsn string) (*SQLiteStore, error) {
 			db.Close()
 			return nil, fmt.Errorf("execute pragma %q: %w", p, err)
 		}
+	}
+
+	// In-memory SQLite databases are unique per connection. When the
+	// database/sql pool opens a second connection to ":memory:", it gets a
+	// completely separate (empty) database.  Limit to one connection so all
+	// queries hit the same in-memory DB.  File-backed databases share state
+	// through the filesystem and don't need this restriction.
+	if dsn == ":memory:" || strings.Contains(dsn, "mode=memory") {
+		db.SetMaxOpenConns(1)
 	}
 
 	return &SQLiteStore{db: db}, nil

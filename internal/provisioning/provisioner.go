@@ -149,10 +149,14 @@ func (p *DefaultProvisioner) startAction(ctx context.Context, nodeID, initiatedB
 		return nil, fmt.Errorf("create job: %w", err)
 	}
 
+	// Return a snapshot so the caller doesn't race with the goroutine
+	// that mutates the job and node pointers as it progresses.
+	snapshot := *job
+
 	// Run pipeline in background goroutine.
 	go p.runPipeline(context.Background(), job, node, pipeline)
 
-	return job, nil
+	return &snapshot, nil
 }
 
 // runPipeline executes each step in sequence, recording results.

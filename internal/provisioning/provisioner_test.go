@@ -127,6 +127,26 @@ func createTestNodeForProvisioning(t *testing.T, env *testEnv) (*domain.Node, do
 	return node, userID
 }
 
+// waitForJobDone polls until the job reaches a terminal state or the timeout expires.
+func waitForJobDone(t *testing.T, env *testEnv, jobID domain.ID, timeout time.Duration) *domain.ProvisioningJob {
+	t.Helper()
+	ctx := context.Background()
+	deadline := time.Now().Add(timeout)
+	for {
+		job, err := env.provisioner.GetJob(ctx, jobID)
+		if err != nil {
+			t.Fatalf("get job: %v", err)
+		}
+		if job.Status == domain.ProvisionStatusCompleted || job.Status == domain.ProvisionStatusFailed {
+			return job
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("job %s did not reach terminal state within %s (current: %s)", jobID, timeout, job.Status)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
 func TestEnrollNodeHappyPath(t *testing.T) {
 	env := setupTestEnv(t)
 	ctx := context.Background()
@@ -150,14 +170,8 @@ func TestEnrollNodeHappyPath(t *testing.T) {
 		t.Errorf("expected initial status pending, got %s", job.Status)
 	}
 
-	// Wait for pipeline to complete.
-	time.Sleep(500 * time.Millisecond)
-
-	// Check job completed.
-	updated, err := env.provisioner.GetJob(ctx, job.ID)
-	if err != nil {
-		t.Fatalf("get job: %v", err)
-	}
+	// Wait for pipeline to complete (poll instead of sleep to avoid races).
+	updated := waitForJobDone(t, env, job.ID, 5*time.Second)
 	if updated.Status != domain.ProvisionStatusCompleted {
 		t.Errorf("expected completed status, got %s (error: %s)", updated.Status, updated.Error)
 	}
@@ -206,13 +220,8 @@ func TestEnrollNodeSSHFailure(t *testing.T) {
 		t.Fatalf("enroll node: %v", err)
 	}
 
-	// Wait for pipeline.
-	time.Sleep(500 * time.Millisecond)
-
-	updated, err := env.provisioner.GetJob(ctx, job.ID)
-	if err != nil {
-		t.Fatalf("get job: %v", err)
-	}
+	// Wait for pipeline to reach terminal state.
+	updated := waitForJobDone(t, env, job.ID, 5*time.Second)
 	if updated.Status != domain.ProvisionStatusFailed {
 		t.Errorf("expected failed status, got %s", updated.Status)
 	}
@@ -236,9 +245,13 @@ func TestConcurrentJobRejection(t *testing.T) {
 
 	node, userID := createTestNodeForProvisioning(t, env)
 
-	// Configure slow SSH responses to keep the first job running.
+	// Use a gate to keep the first job's SSH step blocked until we're done,
+	// then release it so the goroutine exits cleanly (no leaked goroutines).
+	gate := make(chan struct{})
+	t.Cleanup(func() { close(gate) })
+
 	env.sshSession.RunFunc = func(cmd string) (string, error) {
-		time.Sleep(2 * time.Second)
+		<-gate
 		return "edgefabric-ssh-ok\nactive", nil
 	}
 

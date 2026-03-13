@@ -55,13 +55,7 @@ func TestFullEnrollmentFlow(t *testing.T) {
 	}
 
 	// Step 5: Wait for async pipeline to complete.
-	time.Sleep(1 * time.Second)
-
-	// Step 6: Verify job completed successfully.
-	completedJob, err := env.provisioner.GetJob(ctx, job.ID)
-	if err != nil {
-		t.Fatalf("get job: %v", err)
-	}
+	completedJob := waitForJobDone(t, env, job.ID, 5*time.Second)
 	if completedJob.Status != domain.ProvisionStatusCompleted {
 		t.Fatalf("expected job completed, got %s (error: %s)", completedJob.Status, completedJob.Error)
 	}
@@ -139,9 +133,8 @@ func TestDecommissionFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enroll: %v", err)
 	}
-	time.Sleep(1 * time.Second)
 
-	updated, _ := env.provisioner.GetJob(ctx, job.ID)
+	updated := waitForJobDone(t, env, job.ID, 5*time.Second)
 	if updated.Status != domain.ProvisionStatusCompleted {
 		t.Fatalf("enroll job not completed: %s (error: %s)", updated.Status, updated.Error)
 	}
@@ -157,9 +150,8 @@ func TestDecommissionFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decommission: %v", err)
 	}
-	time.Sleep(1 * time.Second)
 
-	updatedDecomm, _ := env.provisioner.GetJob(ctx, decommJob.ID)
+	updatedDecomm := waitForJobDone(t, env, decommJob.ID, 5*time.Second)
 	if updatedDecomm.Status != domain.ProvisionStatusCompleted {
 		t.Fatalf("decommission job not completed: %s (error: %s)", updatedDecomm.Status, updatedDecomm.Error)
 	}
