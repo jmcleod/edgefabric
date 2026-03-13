@@ -99,11 +99,13 @@ func TestRateLimiter_DifferentIPs(t *testing.T) {
 	}
 }
 
-func TestClientIP_XForwardedFor(t *testing.T) {
+func TestClientIP_IgnoresXForwardedFor(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "10.0.0.99:12345"
 	req.Header.Set("X-Forwarded-For", "1.2.3.4, 5.6.7.8")
-	if got := clientIP(req); got != "1.2.3.4" {
-		t.Errorf("expected 1.2.3.4, got %s", got)
+	// Security: clientIP must use RemoteAddr, not the spoofable X-Forwarded-For header.
+	if got := clientIP(req); got != "10.0.0.99" {
+		t.Errorf("expected RemoteAddr 10.0.0.99, got %s (X-Forwarded-For should be ignored)", got)
 	}
 }
 

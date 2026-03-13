@@ -97,38 +97,17 @@ func (rl *RateLimiter) cleanupLoop() {
 	}
 }
 
-// clientIP extracts the client IP from X-Forwarded-For or RemoteAddr.
+// clientIP extracts the client IP from RemoteAddr (the actual TCP peer).
+//
+// Security: we intentionally ignore X-Forwarded-For because any client can
+// spoof it to rotate IPs and bypass rate limits. If the controller is behind
+// a trusted reverse proxy, the proxy should overwrite RemoteAddr or use
+// PROXY protocol. Never trust user-supplied forwarding headers for security
+// decisions like rate limiting.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// First IP in the chain is the original client.
-		if idx := indexOf(xff, ','); idx != -1 {
-			return trimSpace(xff[:idx])
-		}
-		return trimSpace(xff)
-	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
 	return host
-}
-
-func indexOf(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
-}
-
-func trimSpace(s string) string {
-	start, end := 0, len(s)
-	for start < end && s[start] == ' ' {
-		start++
-	}
-	for end > start && s[end-1] == ' ' {
-		end--
-	}
-	return s[start:end]
 }
