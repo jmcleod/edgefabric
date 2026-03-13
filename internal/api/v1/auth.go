@@ -308,6 +308,23 @@ func (h *AuthHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate the requested role and prevent privilege escalation.
+	// API keys can only be created with a role equal to or lower than the caller's role.
+	switch req.Role {
+	case domain.RoleReadOnly:
+		// Anyone can create a readonly key.
+	case domain.RoleAdmin:
+		if claims.Role == domain.RoleReadOnly {
+			apiutil.WriteError(w, http.StatusForbidden, "forbidden", "cannot create API key with higher privileges than your own role")
+			return
+		}
+	default:
+		// Reject superuser and any unknown roles — superusers are global
+		// (no tenant scope) so tenant-scoped API keys must never carry that role.
+		apiutil.WriteError(w, http.StatusBadRequest, "bad_request", "invalid API key role: must be 'readonly' or 'admin'")
+		return
+	}
+
 	rawKey, apiKey, err := h.authSvc.GenerateAPIKey(r.Context(), *claims.TenantID, claims.UserID, req.Name, req.Role)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to create API key")

@@ -36,7 +36,6 @@ const apiKeyFields: FieldConfig<APIKeyFormData>[] = [
     options: [
       { label: 'Read Only', value: 'readonly' },
       { label: 'Admin', value: 'admin' },
-      { label: 'Superuser', value: 'superuser' },
     ],
   },
   { name: 'expires_at', label: 'Expires At', placeholder: 'YYYY-MM-DD (optional)' },
