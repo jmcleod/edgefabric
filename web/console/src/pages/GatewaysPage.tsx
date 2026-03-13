@@ -23,9 +23,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
 
+const PAGE_SIZE = 10;
+
 export default function GatewaysPage() {
   const navigate = useNavigate();
-  const { data, isLoading } = useGateways();
+  const [page, setPage] = useState(0);
+  const { data, isLoading } = useGateways({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
   const gateways = data?.items || [];
   const createGateway = useCreateGateway();
   const deleteGateway = useDeleteGateway();
@@ -138,8 +141,13 @@ export default function GatewaysPage() {
           data={gateways}
           columns={columns}
           searchKeys={['name', 'publicIp']}
-          pageSize={10}
+          pageSize={PAGE_SIZE}
           onRowClick={(gw) => navigate(`/gateways/${gw.id}`)}
+          serverSide={{
+            total: data?.total ?? 0,
+            page,
+            onPageChange: setPage,
+          }}
         />
       )}
 

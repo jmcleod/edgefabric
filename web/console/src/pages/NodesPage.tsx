@@ -32,9 +32,12 @@ const nodeFields: FieldConfig<NodeFormData>[] = [
   { name: 'tenant_id', label: 'Tenant ID', placeholder: 'Optional', description: 'Assign to a specific tenant' },
 ];
 
+const PAGE_SIZE = 10;
+
 export default function NodesPage() {
   const navigate = useNavigate();
-  const { data, isLoading } = useNodes();
+  const [page, setPage] = useState(0);
+  const { data, isLoading } = useNodes({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
   const nodes = data?.items || [];
   const createNode = useCreateNode();
   const deleteNode = useDeleteNode();
@@ -139,8 +142,13 @@ export default function NodesPage() {
           data={nodes}
           columns={columns}
           searchKeys={['name', 'hostname', 'ipv4', 'region']}
-          pageSize={10}
+          pageSize={PAGE_SIZE}
           onRowClick={(node) => navigate(`/nodes/${node.id}`)}
+          serverSide={{
+            total: data?.total ?? 0,
+            page,
+            onPageChange: setPage,
+          }}
         />
       )}
 
