@@ -1,0 +1,1 @@
+import{u as s}from"./useQuery-C7_OslEl.js";import{k as u,a_ as r}from"./index-DedPxzyY.js";function n(t){return s({queryKey:["auditLogs",t],queryFn:async()=>{const e=await u("/api/v1/audit-events",t);return{...e,items:e.items.map(r)}}})}export{n as u};

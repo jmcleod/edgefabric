@@ -1,1 +1,0 @@
-import{u as a}from"./useQuery-BD4Ggo9T.js";import{I as r,a8 as s}from"./index-zHvwFt2i.js";function n(){return a({queryKey:["status"],queryFn:async()=>{const t=await r("/api/v1/status");return{stats:s(t),raw:t}},refetchInterval:3e4})}export{n as u};
