@@ -70,9 +70,7 @@ export function transformNode(api: ApiNode): Node {
     nodeGroupId: undefined, // Not on node object directly
     lastSeen: api.last_heartbeat || api.updated_at,
     version: api.binary_version || '\u2014',
-    cpu: 0,      // No runtime metrics in backend yet
-    memory: 0,   // No runtime metrics in backend yet
-    uptime: '\u2014', // No runtime metrics in backend yet
+    // cpu, memory, uptime intentionally omitted — no runtime metrics in backend yet
   };
 }
 

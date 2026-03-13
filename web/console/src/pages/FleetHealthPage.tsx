@@ -4,7 +4,6 @@ import { StatCard } from '@/components/ui/StatCard';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStatus } from '@/hooks/useStatus';
 import { useNodes } from '@/hooks/useNodes';
@@ -63,23 +62,10 @@ export default function FleetHealthPage() {
       render: (node) => <code className="mono-data text-xs">{node.version}</code>,
     },
     {
-      key: 'cpu',
-      header: 'CPU',
-      render: (node) => (
-        <div className="flex items-center gap-2 w-24">
-          <Progress value={node.cpu} className="h-1.5 flex-1" />
-          <span className="text-xs text-muted-foreground w-8 text-right">{node.cpu}%</span>
-        </div>
-      ),
-    },
-    {
-      key: 'memory',
-      header: 'Memory',
-      render: (node) => (
-        <div className="flex items-center gap-2 w-24">
-          <Progress value={node.memory} className="h-1.5 flex-1" />
-          <span className="text-xs text-muted-foreground w-8 text-right">{node.memory}%</span>
-        </div>
+      key: 'metrics',
+      header: 'Metrics',
+      render: () => (
+        <span className="text-xs text-muted-foreground italic">Not available</span>
       ),
     },
     {

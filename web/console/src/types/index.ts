@@ -41,9 +41,9 @@ export interface Node {
   nodeGroupId?: string;
   lastSeen: string;
   version: string;
-  cpu: number;
-  memory: number;
-  uptime: string;
+  cpu?: number;
+  memory?: number;
+  uptime?: string;
 }
 
 export interface NodeGroup {

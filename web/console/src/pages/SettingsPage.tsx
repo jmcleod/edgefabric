@@ -53,9 +53,9 @@ export default function SettingsPage() {
               <CardDescription>Security and access settings</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <InfoRow label="TLS Enforcement" value="Enabled" />
-              <InfoRow label="Rate Limiting" value="Enabled" />
-              <InfoRow label="CORS" value="Configured" />
+              <InfoRow label="TLS Enforcement" value={raw?.tls_enabled ? 'Enabled' : 'Not configured'} />
+              <InfoRow label="Rate Limiting" value="Not available" />
+              <InfoRow label="CORS" value={raw?.cors_origins?.length ? 'Configured' : 'Not configured'} />
               <InfoRow label="TOTP Support" value="Available" />
             </CardContent>
           </Card>
