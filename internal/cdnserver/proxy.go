@@ -60,8 +60,6 @@ type ProxyService struct {
 
 	// Internal counters.
 	requestsTotal atomic.Uint64
-	cacheHits     atomic.Uint64
-	cacheMisses   atomic.Uint64
 }
 
 // NewProxyService creates a new CDN reverse proxy service.
@@ -522,7 +520,6 @@ type gzipResponseWriter struct {
 	http.ResponseWriter
 	buf        *bytes.Buffer
 	statusCode int
-	headerSent bool
 }
 
 func (g *gzipResponseWriter) WriteHeader(code int) {

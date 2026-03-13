@@ -169,7 +169,7 @@ func (c *RouteHealthChecker) checkRoute(state *routeHealthState) {
 		return
 	}
 
-	addr := fmt.Sprintf("%s:%d", t.GatewayWGIP, t.EntryPort)
+	addr := net.JoinHostPort(t.GatewayWGIP, fmt.Sprintf("%d", t.EntryPort))
 	conn, err := net.DialTimeout("tcp", addr, c.config.Timeout)
 	success := err == nil
 	if conn != nil {

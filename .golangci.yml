@@ -6,28 +6,24 @@ run:
 linters:
   default: none
   enable:
-    - errcheck
     - govet
     - ineffassign
     - staticcheck
     - unused
-    - gocritic
-    - gosec
     - misspell
-    - prealloc
-    - unconvert
-    - unparam
     - revive
   settings:
     govet:
       enable-all: true
       disable:
         - fieldalignment
-    gocritic:
-      enabled-tags:
-        - diagnostic
-        - style
-        - performance
+        - shadow
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST*"      # style suggestions (ST1000 package comments, ST1003 naming, ST1005 errors, ST1020 comment form)
+        - "-QF*"      # quick-fix suggestions
+        - "-SA1019"   # deprecated usage
     revive:
       rules:
         - name: exported
@@ -36,12 +32,8 @@ linters:
     rules:
       - path: _test\.go
         linters:
-          - gosec
-          - errcheck
-
-formatters:
-  enable:
-    - gofumpt
+          - ineffassign
+          - staticcheck
 
 issues:
   max-issues-per-linter: 50

@@ -141,7 +141,7 @@ func (c *OverlayHealthChecker) checkAll() {
 }
 
 func (c *OverlayHealthChecker) checkPeer(peer *overlayPeerState) {
-	addr := fmt.Sprintf("%s:%d", peer.target.IP, c.config.ProbePort)
+	addr := net.JoinHostPort(peer.target.IP, fmt.Sprintf("%d", c.config.ProbePort))
 	conn, err := net.DialTimeout("tcp", addr, c.config.Timeout)
 	success := err == nil
 	if conn != nil {

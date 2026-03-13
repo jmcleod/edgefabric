@@ -173,14 +173,6 @@ func nullIDString(id *domain.ID) sql.NullString {
 	return sql.NullString{String: id.String(), Valid: true}
 }
 
-// scanNullString converts sql.NullString to *string.
-func scanNullString(ns sql.NullString) *string {
-	if !ns.Valid {
-		return nil
-	}
-	return &ns.String
-}
-
 // Migration describes a single schema migration step.
 type Migration struct {
 	SQL         string

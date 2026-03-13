@@ -68,13 +68,6 @@ func (p *icmpProxy) addRoute(routeID, destinationIP string) {
 	)
 }
 
-// removeRoute unregisters an ICMP route.
-func (p *icmpProxy) removeRoute(routeID string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	delete(p.routes, routeID)
-}
-
 // routeCount returns the number of active ICMP routes.
 func (p *icmpProxy) routeCount() int {
 	p.mu.RLock()

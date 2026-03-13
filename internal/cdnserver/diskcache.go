@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 	"time"
 )
@@ -359,16 +358,3 @@ func (h *HybridCache) Stats() (hits, misses uint64) {
 	return h.hits, h.misses
 }
 
-// sortedEntries returns disk index entries sorted by storedAt (for testing).
-func (d *DiskCache) sortedEntries() []diskIndexEntry {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	entries := make([]diskIndexEntry, 0, len(d.index))
-	for _, ie := range d.index {
-		entries = append(entries, *ie)
-	}
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].storedAt.Before(entries[j].storedAt)
-	})
-	return entries
-}
