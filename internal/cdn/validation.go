@@ -3,6 +3,7 @@ package cdn
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 
@@ -163,6 +164,11 @@ func validateOrigin(o *domain.CDNOrigin) error {
 		return fmt.Errorf("origin address is required")
 	}
 
+	// SSRF protection: block origins pointing at internal/private networks.
+	if err := validateOriginAddress(o.Address); err != nil {
+		return fmt.Errorf("origin address: %w", err)
+	}
+
 	if err := validateOriginScheme(o.Scheme); err != nil {
 		return err
 	}
@@ -180,6 +186,101 @@ func validateOrigin(o *domain.CDNOrigin) error {
 	}
 
 	return nil
+}
+
+// validateOriginAddress performs SSRF protection by rejecting origin addresses
+// that resolve to private, loopback, link-local, or cloud metadata IPs.
+// This prevents semi-trusted tenants from targeting internal services.
+func validateOriginAddress(address string) error {
+	// Strip port if present (address may be "host:port" or just "host").
+	host := address
+	if h, _, err := net.SplitHostPort(address); err == nil {
+		host = h
+	}
+
+	// Block well-known internal hostnames.
+	lower := strings.ToLower(host)
+	blockedHosts := []string{
+		"localhost",
+		"metadata.google.internal",
+		"metadata.google",
+		"kubernetes.default",
+		"kubernetes.default.svc",
+	}
+	for _, blocked := range blockedHosts {
+		if lower == blocked || strings.HasSuffix(lower, "."+blocked) {
+			return fmt.Errorf("origin address %q resolves to a blocked internal host", address)
+		}
+	}
+
+	// Resolve to IPs and check each one.
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		// If it's a raw IP, parse it directly.
+		ip := net.ParseIP(host)
+		if ip == nil {
+			return fmt.Errorf("cannot resolve origin address %q: %v", address, err)
+		}
+		ips = []string{ip.String()}
+	}
+
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			continue
+		}
+		if isBlockedIP(ip) {
+			return fmt.Errorf("origin address %q resolves to blocked IP %s (private/internal network)", address, ipStr)
+		}
+	}
+
+	return nil
+}
+
+// isBlockedIP returns true if the IP is in a private, loopback, link-local,
+// or cloud metadata range that should not be used as a CDN origin.
+func isBlockedIP(ip net.IP) bool {
+	// Loopback (127.0.0.0/8, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+
+	// Link-local (169.254.0.0/16, fe80::/10)
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+
+	// Private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7)
+	privateRanges := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"fc00::/7",
+	}
+	for _, cidr := range privateRanges {
+		_, network, _ := net.ParseCIDR(cidr)
+		if network.Contains(ip) {
+			return true
+		}
+	}
+
+	// AWS/GCP/Azure metadata endpoints (169.254.169.254, fd00:ec2::254)
+	metadataIPs := []string{
+		"169.254.169.254",
+		"fd00:ec2::254",
+	}
+	for _, mip := range metadataIPs {
+		if ip.Equal(net.ParseIP(mip)) {
+			return true
+		}
+	}
+
+	// Unspecified (0.0.0.0, ::)
+	if ip.IsUnspecified() {
+		return true
+	}
+
+	return false
 }
 
 // validateOriginScheme validates the origin scheme.

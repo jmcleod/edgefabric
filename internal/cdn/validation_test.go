@@ -133,8 +133,9 @@ func TestValidateSite_Bad(t *testing.T) {
 
 func TestValidateOrigin_Good(t *testing.T) {
 	interval := 30
+	// Use a known public IP to avoid DNS resolution issues in tests.
 	origin := &domain.CDNOrigin{
-		Address:             "origin.example.com:443",
+		Address:             "93.184.216.34:443",
 		Scheme:              domain.CDNOriginHTTPS,
 		Weight:              10,
 		HealthCheckPath:     "/healthz",
@@ -161,7 +162,7 @@ func TestValidateOrigin_Bad(t *testing.T) {
 		{
 			name: "empty scheme",
 			origin: &domain.CDNOrigin{
-				Address: "origin.example.com",
+				Address: "93.184.216.34",
 				Scheme:  "",
 				Weight:  1,
 			},
@@ -169,7 +170,7 @@ func TestValidateOrigin_Bad(t *testing.T) {
 		{
 			name: "invalid scheme",
 			origin: &domain.CDNOrigin{
-				Address: "origin.example.com",
+				Address: "93.184.216.34",
 				Scheme:  "ftp",
 				Weight:  1,
 			},
@@ -177,7 +178,7 @@ func TestValidateOrigin_Bad(t *testing.T) {
 		{
 			name: "zero weight",
 			origin: &domain.CDNOrigin{
-				Address: "origin.example.com",
+				Address: "93.184.216.34",
 				Scheme:  domain.CDNOriginHTTPS,
 				Weight:  0,
 			},
@@ -185,7 +186,7 @@ func TestValidateOrigin_Bad(t *testing.T) {
 		{
 			name: "negative weight",
 			origin: &domain.CDNOrigin{
-				Address: "origin.example.com",
+				Address: "93.184.216.34",
 				Scheme:  domain.CDNOriginHTTPS,
 				Weight:  -1,
 			},
@@ -193,7 +194,7 @@ func TestValidateOrigin_Bad(t *testing.T) {
 		{
 			name: "health check path without slash",
 			origin: &domain.CDNOrigin{
-				Address:         "origin.example.com",
+				Address:         "93.184.216.34",
 				Scheme:          domain.CDNOriginHTTPS,
 				Weight:          1,
 				HealthCheckPath: "healthz",
@@ -204,7 +205,7 @@ func TestValidateOrigin_Bad(t *testing.T) {
 			origin: func() *domain.CDNOrigin {
 				interval := 2
 				return &domain.CDNOrigin{
-					Address:             "origin.example.com",
+					Address:             "93.184.216.34",
 					Scheme:              domain.CDNOriginHTTPS,
 					Weight:              1,
 					HealthCheckInterval: &interval,
@@ -217,6 +218,51 @@ func TestValidateOrigin_Bad(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := validateOrigin(tc.origin); err == nil {
 				t.Error("expected validation error, got nil")
+			}
+		})
+	}
+}
+
+func TestValidateOriginAddress_SSRF(t *testing.T) {
+	// Addresses that should be BLOCKED (SSRF targets).
+	blocked := []struct {
+		name    string
+		address string
+	}{
+		{"loopback IPv4", "127.0.0.1"},
+		{"loopback IPv4 with port", "127.0.0.1:8080"},
+		{"loopback IPv6", "::1"},
+		{"private 10.x", "10.0.0.1"},
+		{"private 172.16.x", "172.16.0.1"},
+		{"private 192.168.x", "192.168.1.1"},
+		{"link-local", "169.254.1.1"},
+		{"metadata endpoint", "169.254.169.254"},
+		{"localhost hostname", "localhost"},
+		{"localhost with port", "localhost:8080"},
+		{"unspecified IPv4", "0.0.0.0"},
+		{"unspecified IPv6", "::"},
+	}
+	for _, tc := range blocked {
+		t.Run("blocked/"+tc.name, func(t *testing.T) {
+			if err := validateOriginAddress(tc.address); err == nil {
+				t.Errorf("expected address %q to be blocked, but validation passed", tc.address)
+			}
+		})
+	}
+
+	// Addresses that should be ALLOWED.
+	allowed := []struct {
+		name    string
+		address string
+	}{
+		{"public IP", "93.184.216.34"},
+		{"public IP with port", "93.184.216.34:443"},
+		{"public IPv6", "2606:2800:220:1:248:1893:25c8:1946"},
+	}
+	for _, tc := range allowed {
+		t.Run("allowed/"+tc.name, func(t *testing.T) {
+			if err := validateOriginAddress(tc.address); err != nil {
+				t.Errorf("expected address %q to be allowed, got error: %v", tc.address, err)
 			}
 		})
 	}
