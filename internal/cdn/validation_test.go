@@ -141,7 +141,7 @@ func TestValidateOrigin_Good(t *testing.T) {
 		HealthCheckPath:     "/healthz",
 		HealthCheckInterval: &interval,
 	}
-	if err := validateOrigin(origin); err != nil {
+	if err := validateOrigin(origin, false); err != nil {
 		t.Errorf("expected valid origin, got error: %v", err)
 	}
 }
@@ -216,7 +216,7 @@ func TestValidateOrigin_Bad(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateOrigin(tc.origin); err == nil {
+			if err := validateOrigin(tc.origin, false); err == nil {
 				t.Error("expected validation error, got nil")
 			}
 		})

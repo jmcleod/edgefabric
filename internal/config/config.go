@@ -37,10 +37,19 @@ type ControllerConfig struct {
 	Storage        StorageConfig         `yaml:"storage"`
 	TLS            TLSConfig             `yaml:"tls,omitempty"`
 	CORS           CORSConfig            `yaml:"cors,omitempty"`
+	CDN            ControllerCDNConfig   `yaml:"cdn,omitempty"`
 	Notifications  NotificationsConfig   `yaml:"notifications,omitempty"`
 	LeaderElection LeaderElectionConfig  `yaml:"leader_election,omitempty"`
 	WireGuard      WireGuardHub          `yaml:"wireguard"`
 	Secrets        SecretsConfig         `yaml:"secrets"`
+}
+
+// ControllerCDNConfig holds controller-side CDN management settings.
+type ControllerCDNConfig struct {
+	// AllowPrivateOrigins disables SSRF validation on CDN origin addresses,
+	// permitting private/internal IPs. Use only in trusted environments
+	// (e.g., Docker Compose demos, development clusters).
+	AllowPrivateOrigins bool `yaml:"allow_private_origins,omitempty"`
 }
 
 // LeaderElectionConfig holds HA leader election settings.

@@ -10,10 +10,21 @@ import (
 
 // DefaultService is the controller-side CDN management service.
 type DefaultService struct {
-	sites      storage.CDNSiteStore
-	origins    storage.CDNOriginStore
-	nodeGroups storage.NodeGroupStore
-	nodes      storage.NodeStore
+	sites               storage.CDNSiteStore
+	origins             storage.CDNOriginStore
+	nodeGroups          storage.NodeGroupStore
+	nodes               storage.NodeStore
+	allowPrivateOrigins bool
+}
+
+// Option configures optional behavior of the CDN service.
+type Option func(*DefaultService)
+
+// AllowPrivateOrigins disables SSRF validation on origin addresses,
+// permitting private/internal IPs (e.g., Docker networks, Kubernetes pods).
+// Use only in trusted environments such as demos or development.
+func AllowPrivateOrigins() Option {
+	return func(s *DefaultService) { s.allowPrivateOrigins = true }
 }
 
 // NewService creates a new CDN service.
@@ -22,13 +33,18 @@ func NewService(
 	origins storage.CDNOriginStore,
 	nodeGroups storage.NodeGroupStore,
 	nodes storage.NodeStore,
+	opts ...Option,
 ) *DefaultService {
-	return &DefaultService{
+	svc := &DefaultService{
 		sites:      sites,
 		origins:    origins,
 		nodeGroups: nodeGroups,
 		nodes:      nodes,
 	}
+	for _, o := range opts {
+		o(svc)
+	}
+	return svc
 }
 
 // --- Site CRUD ---
@@ -153,7 +169,7 @@ func (s *DefaultService) CreateOrigin(ctx context.Context, req CreateOriginReque
 		origin.Weight = 1
 	}
 
-	if err := validateOrigin(origin); err != nil {
+	if err := validateOrigin(origin, s.allowPrivateOrigins); err != nil {
 		return nil, fmt.Errorf("invalid origin: %w", err)
 	}
 
@@ -196,7 +212,7 @@ func (s *DefaultService) UpdateOrigin(ctx context.Context, id domain.ID, req Upd
 		origin.Status = *req.Status
 	}
 
-	if err := validateOrigin(origin); err != nil {
+	if err := validateOrigin(origin, s.allowPrivateOrigins); err != nil {
 		return nil, fmt.Errorf("invalid origin: %w", err)
 	}
 

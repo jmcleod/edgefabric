@@ -13,6 +13,10 @@ controller:
   tls:
     enabled: false
 
+  # Allow CDN origins on Docker-internal IPs (172.20.x.x).
+  cdn:
+    allow_private_origins: true
+
   storage:
     driver: sqlite
     dsn: "/var/lib/edgefabric/demo.db"

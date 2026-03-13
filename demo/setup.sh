@@ -9,6 +9,7 @@
 set -e
 
 CONTROLLER_URL="${CONTROLLER_URL:-http://controller:8443}"
+COOKIE_JAR="/tmp/ef-session-cookies"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -20,16 +21,17 @@ fail()  { printf '\033[1;31m✘ %s\033[0m\n' "$1"; exit 1; }
 
 api() {
   # api METHOD PATH [JSON_BODY]
+  # Uses the session cookie saved during login.
   _method="$1"; _path="$2"; _body="${3:-}"
   if [ -n "$_body" ]; then
     curl -sf -X "$_method" \
-      -H "Authorization: Bearer $TOKEN" \
+      -b "$COOKIE_JAR" \
       -H "Content-Type: application/json" \
       -d "$_body" \
       "${CONTROLLER_URL}${_path}"
   else
     curl -sf -X "$_method" \
-      -H "Authorization: Bearer $TOKEN" \
+      -b "$COOKIE_JAR" \
       "${CONTROLLER_URL}${_path}"
   fi
 }
@@ -79,15 +81,31 @@ ok "Admin password extracted"
 
 info "Logging in as admin@edgefabric.local..."
 LOGIN_RESP=$(curl -sf -X POST \
+  -c "$COOKIE_JAR" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"admin@edgefabric.local\",\"password\":\"${ADMIN_PASSWORD}\"}" \
   "${CONTROLLER_URL}/api/v1/auth/login")
 
-TOKEN=$(echo "$LOGIN_RESP" | jq -r '.data.token')
-if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-  fail "Login failed: $LOGIN_RESP"
+# Session is now stored in an HttpOnly cookie (saved to cookie jar).
+# Verify we got a valid session by checking the cookie file exists and has content.
+if [ ! -s "$COOKIE_JAR" ] || ! grep -q "ef_session" "$COOKIE_JAR"; then
+  fail "Login failed: no session cookie received. Response: $LOGIN_RESP"
 fi
-ok "Logged in (token acquired)"
+ok "Logged in (session cookie acquired)"
+
+# Create an API key for machine-to-machine auth (gateways, nodes).
+# The session cookie is used to authenticate this request.
+info "Creating API key for machine clients..."
+APIKEY_RESP=$(curl -sf -X POST \
+  -b "$COOKIE_JAR" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"demo-setup","role":"admin"}' \
+  "${CONTROLLER_URL}/api/v1/api-keys")
+API_TOKEN=$(echo "$APIKEY_RESP" | jq -r '.data.raw_key')
+if [ -z "$API_TOKEN" ] || [ "$API_TOKEN" = "null" ]; then
+  fail "Failed to create API key: $APIKEY_RESP"
+fi
+ok "API key created for machine clients"
 
 # ===========================================================================
 # TENANT 1 — Acme Corp
@@ -221,7 +239,7 @@ ok "Gateway created: $ACME_GW_ID"
 
 # Write gateway state file so the gateway container can poll route config.
 info "Writing gateway state file..."
-printf '{\n  "gateway_id": "%s",\n  "api_token": "%s"\n}\n' "$ACME_GW_ID" "$TOKEN" > /shared/gateway-state.json
+printf '{\n  "gateway_id": "%s",\n  "api_token": "%s"\n}\n' "$ACME_GW_ID" "$API_TOKEN" > /shared/gateway-state.json
 ok "Gateway state written to /shared/gateway-state.json"
 
 info "Creating gateway: gw-branch (Globex)..."

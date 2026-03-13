@@ -148,11 +148,16 @@ func RunController(cfg *config.Config) error {
 	)
 
 	// Initialize CDN service.
+	var cdnOpts []cdn.Option
+	if cfg.Controller.CDN.AllowPrivateOrigins {
+		cdnOpts = append(cdnOpts, cdn.AllowPrivateOrigins())
+	}
 	cdnSvc := cdn.NewService(
 		store, // CDNSiteStore
 		store, // CDNOriginStore
 		store, // NodeGroupStore
 		store, // NodeStore
+		cdnOpts...,
 	)
 
 	// Initialize route service.

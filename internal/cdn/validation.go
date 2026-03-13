@@ -159,14 +159,17 @@ func validateHeaderRules(raw json.RawMessage) error {
 }
 
 // validateOrigin validates a CDN origin configuration for creation.
-func validateOrigin(o *domain.CDNOrigin) error {
+// When allowPrivate is true, SSRF checks are skipped (for demo/dev environments).
+func validateOrigin(o *domain.CDNOrigin, allowPrivate bool) error {
 	if o.Address == "" {
 		return fmt.Errorf("origin address is required")
 	}
 
 	// SSRF protection: block origins pointing at internal/private networks.
-	if err := validateOriginAddress(o.Address); err != nil {
-		return fmt.Errorf("origin address: %w", err)
+	if !allowPrivate {
+		if err := validateOriginAddress(o.Address); err != nil {
+			return fmt.Errorf("origin address: %w", err)
+		}
 	}
 
 	if err := validateOriginScheme(o.Scheme); err != nil {
