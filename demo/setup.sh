@@ -93,19 +93,13 @@ if [ ! -s "$COOKIE_JAR" ] || ! grep -q "ef_session" "$COOKIE_JAR"; then
 fi
 ok "Logged in (session cookie acquired)"
 
-# Create an API key for machine-to-machine auth (gateways, nodes).
-# The session cookie is used to authenticate this request.
-info "Creating API key for machine clients..."
-APIKEY_RESP=$(curl -sf -X POST \
-  -b "$COOKIE_JAR" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"demo-setup","role":"admin"}' \
-  "${CONTROLLER_URL}/api/v1/api-keys")
-API_TOKEN=$(echo "$APIKEY_RESP" | jq -r '.data.raw_key')
-if [ -z "$API_TOKEN" ] || [ "$API_TOKEN" = "null" ]; then
-  fail "Failed to create API key: $APIKEY_RESP"
+# Extract the session token from the cookie jar for machine clients (e.g., gateway).
+# The auth middleware accepts both cookies (browser) and Bearer tokens (agents).
+API_TOKEN=$(grep "ef_session" "$COOKIE_JAR" | awk '{print $NF}')
+if [ -z "$API_TOKEN" ]; then
+  fail "Could not extract session token from cookie jar"
 fi
-ok "API key created for machine clients"
+ok "Session token extracted for machine clients"
 
 # ===========================================================================
 # TENANT 1 — Acme Corp
