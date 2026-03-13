@@ -60,17 +60,36 @@ func TestLogin_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", resp.Error)
 	}
 
-	// Verify a token was returned in the data.
+	// Verify the session token is now in an HttpOnly cookie, NOT in the JSON body.
 	data, ok := resp.Data.(map[string]any)
 	if !ok {
 		t.Fatalf("expected data to be map, got %T", resp.Data)
 	}
-	token, ok := data["token"].(string)
-	if !ok || token == "" {
-		t.Error("expected non-empty token in response")
+	// Body token should be empty — session is cookie-based.
+	if token, ok := data["token"].(string); ok && token != "" {
+		t.Error("expected empty token in response body (session should be in HttpOnly cookie)")
 	}
 	if totpRequired, ok := data["totp_required"].(bool); !ok || totpRequired {
 		t.Error("expected totp_required to be false")
+	}
+
+	// Verify the HttpOnly session cookie was set.
+	cookies := w.Result().Cookies()
+	var sessionCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "ef_session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("expected ef_session cookie to be set")
+	}
+	if !sessionCookie.HttpOnly {
+		t.Error("expected session cookie to be HttpOnly")
+	}
+	if sessionCookie.Value == "" {
+		t.Error("expected non-empty session cookie value")
 	}
 
 	// Verify audit event was logged.
@@ -227,7 +246,7 @@ func TestCreateAPIKey_Success(t *testing.T) {
 	auditLog := newMockAuditLogger()
 	handler := newTestAuthHandler(authSvc, auditLog)
 
-	body := `{"name":"test-key","role":"operator"}`
+	body := `{"name":"test-key","role":"admin"}`
 	req := httptest.NewRequest("POST", "/api/v1/api-keys", strings.NewReader(body))
 	ctx := middleware.ContextWithClaims(req.Context(), &auth.Claims{
 		UserID:   userID,

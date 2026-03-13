@@ -43,20 +43,22 @@ func Auth(tokenSvc *auth.TokenService, authSvc auth.Service, opts ...AuthOption)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if header == "" {
-				apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authorization header")
-				return
+			// Extract token from either:
+			//  1. Authorization: Bearer <token> (API keys and MFA-pending tokens)
+			//  2. ef_session cookie (browser sessions — HttpOnly, not accessible to JS)
+			var token string
+			if header := r.Header.Get("Authorization"); header != "" {
+				if !strings.HasPrefix(header, "Bearer ") {
+					apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid authorization scheme")
+					return
+				}
+				token = strings.TrimPrefix(header, "Bearer ")
+			} else if cookie, err := r.Cookie("ef_session"); err == nil {
+				token = cookie.Value
 			}
 
-			if !strings.HasPrefix(header, "Bearer ") {
-				apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid authorization scheme")
-				return
-			}
-
-			token := strings.TrimPrefix(header, "Bearer ")
 			if token == "" {
-				apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "empty token")
+				apiutil.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing authorization")
 				return
 			}
 

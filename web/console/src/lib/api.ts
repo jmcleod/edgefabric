@@ -1,20 +1,8 @@
 // EdgeFabric API client — wraps fetch with auth, error handling, and envelope unwrapping.
-
-const TOKEN_KEY = 'edgefabric-token';
-
-// --- Token helpers ---
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
+//
+// Session tokens are stored in HttpOnly cookies (set by the server).
+// The browser sends them automatically — no JS-accessible token storage.
+// Only the MFA-pending token is passed explicitly via Authorization header.
 
 // --- Error types ---
 
@@ -54,24 +42,19 @@ interface ApiListResponse<T> {
 // --- Core fetch wrapper ---
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const response = await fetch(path, {
     ...options,
     headers,
+    credentials: 'include', // Always send cookies (HttpOnly session cookie).
   });
 
   // Handle 401 — redirect to login
   if (response.status === 401) {
-    clearToken();
     // Only redirect if we're not already on the login page
     if (window.location.pathname !== '/login') {
       window.location.href = '/login';
@@ -145,7 +128,8 @@ export async function apiDelete(path: string): Promise<void> {
   await apiFetch<void>(path, { method: 'DELETE' });
 }
 
-/** POST for login — returns raw response (not envelope-wrapped). */
+/** POST for login — the server sets an HttpOnly cookie on success.
+ *  Returns the MFA-pending token in the body only when TOTP is required. */
 export async function apiLogin(email: string, password: string): Promise<{ token: string; totp_required: boolean }> {
   const resp = await apiFetch<ApiResponse<{ token: string; totp_required: boolean }>>('/api/v1/auth/login', {
     method: 'POST',
@@ -154,23 +138,16 @@ export async function apiLogin(email: string, password: string): Promise<{ token
   return resp.data as { token: string; totp_required: boolean };
 }
 
-/** POST for TOTP verification. */
-export async function apiVerifyTotp(code: string): Promise<{ token: string }> {
-  const resp = await apiFetch<ApiResponse<{ token: string }>>('/api/v1/auth/totp/verify', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
-  });
-  return resp.data as { token: string };
-}
-
-/** POST for TOTP verification using an explicit pending token (not stored in localStorage). */
-export async function apiVerifyTotpWithToken(code: string, pendingToken: string): Promise<{ token: string }> {
+/** POST for TOTP verification using an explicit pending token (held in memory, not a cookie).
+ *  On success the server sets the HttpOnly session cookie. */
+export async function apiVerifyTotpWithToken(code: string, pendingToken: string): Promise<{ status: string }> {
   const response = await fetch('/api/v1/auth/totp/verify', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${pendingToken}`,
     },
+    credentials: 'include', // Accept the session cookie set by the server.
     body: JSON.stringify({ code }),
   });
 
@@ -181,5 +158,17 @@ export async function apiVerifyTotpWithToken(code: string, pendingToken: string)
   }
 
   const body = await response.json();
-  return body.data as { token: string };
+  return body.data as { status: string };
+}
+
+/** POST logout — tells the server to clear the session cookie. */
+export async function apiLogout(): Promise<void> {
+  try {
+    await fetch('/api/v1/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    // Best-effort — if the server is unreachable, the cookie will expire naturally.
+  }
 }

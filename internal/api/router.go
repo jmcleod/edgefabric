@@ -75,7 +75,7 @@ func NewRouter(svc Services) http.Handler {
 	userHandler := v1.NewUserHandler(svc.UserSvc, svc.Authorizer, svc.AuditLog)
 	userHandler.Register(mux, authMW)
 
-	authHandler := v1.NewAuthHandler(svc.AuthSvc, svc.TokenSvc, svc.APIKeys, svc.UserSvc, svc.Authorizer, svc.AuditLog, svc.Metrics)
+	authHandler := v1.NewAuthHandler(svc.AuthSvc, svc.TokenSvc, svc.APIKeys, svc.UserSvc, svc.Authorizer, svc.AuditLog, svc.Metrics, svc.TLSEnabled)
 	authHandler.Register(mux, authMW)
 
 	auditHandler := v1.NewAuditHandler(svc.AuditLog, svc.Authorizer)

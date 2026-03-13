@@ -2,6 +2,7 @@ package v1
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/jmcleod/edgefabric/internal/api/apiutil"
 	"github.com/jmcleod/edgefabric/internal/api/middleware"
@@ -14,6 +15,13 @@ import (
 	"github.com/jmcleod/edgefabric/internal/user"
 )
 
+const (
+	// sessionCookieName is the name of the HttpOnly cookie carrying the session token.
+	sessionCookieName = "ef_session"
+	// sessionCookieMaxAge matches the token TTL (24 hours).
+	sessionCookieMaxAge = 24 * time.Hour
+)
+
 // AuthHandler handles authentication and API key endpoints.
 type AuthHandler struct {
 	authSvc    auth.Service
@@ -23,10 +31,12 @@ type AuthHandler struct {
 	authorizer rbac.Authorizer
 	audit      audit.Logger
 	metrics    *observability.Metrics
+	tlsEnabled bool
 }
 
 // NewAuthHandler creates a new auth handler.
-func NewAuthHandler(authSvc auth.Service, tokenSvc *auth.TokenService, apiKeys storage.APIKeyStore, userSvc user.Service, authorizer rbac.Authorizer, audit audit.Logger, metrics *observability.Metrics) *AuthHandler {
+func NewAuthHandler(authSvc auth.Service, tokenSvc *auth.TokenService, apiKeys storage.APIKeyStore, userSvc user.Service, authorizer rbac.Authorizer, audit audit.Logger, metrics *observability.Metrics, tlsEnabled ...bool) *AuthHandler {
+	tls := len(tlsEnabled) > 0 && tlsEnabled[0]
 	return &AuthHandler{
 		authSvc:    authSvc,
 		tokenSvc:   tokenSvc,
@@ -35,13 +45,42 @@ func NewAuthHandler(authSvc auth.Service, tokenSvc *auth.TokenService, apiKeys s
 		authorizer: authorizer,
 		audit:      audit,
 		metrics:    metrics,
+		tlsEnabled: tls,
 	}
+}
+
+// setSessionCookie writes an HttpOnly, Secure, SameSite=Strict cookie
+// containing the session token. This prevents XSS from stealing credentials.
+func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   int(sessionCookieMaxAge.Seconds()),
+		HttpOnly: true,
+		Secure:   h.tlsEnabled,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// clearSessionCookie removes the session cookie.
+func (h *AuthHandler) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.tlsEnabled,
+		SameSite: http.SameSiteStrictMode,
+	})
 }
 
 // Register mounts auth routes on the mux.
 func (h *AuthHandler) Register(mux *http.ServeMux, authMW func(http.Handler) http.Handler) {
 	// Public routes (no auth required).
 	mux.Handle("POST /api/v1/auth/login", http.HandlerFunc(h.Login))
+	mux.Handle("POST /api/v1/auth/logout", http.HandlerFunc(h.Logout))
 
 	// Protected routes.
 	mux.Handle("GET /api/v1/auth/me", middleware.Chain(http.HandlerFunc(h.Me), authMW))
@@ -134,7 +173,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		SourceIP: r.RemoteAddr,
 	})
 
-	apiutil.JSON(w, http.StatusOK, loginResponse{Token: token, TOTPRequired: false})
+	// Set session cookie so the browser never needs to store the token in JS-accessible storage.
+	h.setSessionCookie(w, token)
+	apiutil.JSON(w, http.StatusOK, loginResponse{Token: "", TOTPRequired: false})
 }
 
 // Me handles GET /api/v1/auth/me — returns the current authenticated user.
@@ -208,7 +249,9 @@ func (h *AuthHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 		SourceIP: r.RemoteAddr,
 	})
 
-	apiutil.JSON(w, http.StatusOK, map[string]string{"token": token})
+	// Set session cookie — MFA is complete.
+	h.setSessionCookie(w, token)
+	apiutil.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // totpEnrollResponse is the response for TOTP enrollment.
@@ -275,6 +318,12 @@ func (h *AuthHandler) ConfirmTOTP(w http.ResponseWriter, r *http.Request) {
 	})
 
 	apiutil.JSON(w, http.StatusOK, map[string]string{"status": "totp_enabled"})
+}
+
+// Logout handles POST /api/v1/auth/logout — clears the session cookie.
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	h.clearSessionCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // createAPIKeyRequest is the body of POST /api/v1/api-keys.

@@ -1,13 +1,12 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiLogin, apiVerifyTotpWithToken, apiGet, getToken, setToken, clearToken } from '@/lib/api';
+import { apiLogin, apiVerifyTotpWithToken, apiGet, apiLogout } from '@/lib/api';
 import { transformUser } from '@/lib/transforms';
 import type { User } from '@/types';
 import type { ApiUser } from '@/types/api';
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ totpRequired: boolean }>;
   verifyTotp: (code: string) => Promise<void>;
@@ -18,46 +17,36 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setTokenState] = useState<string | null>(getToken());
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch current user profile using stored token
+  // Fetch current user profile using the HttpOnly session cookie.
   const fetchMe = useCallback(async () => {
     try {
       const apiUser = await apiGet<ApiUser>('/api/v1/auth/me');
       setUser(transformUser(apiUser));
     } catch {
-      // Token invalid or expired — clear it
-      clearToken();
-      setTokenState(null);
+      // No valid session cookie — user is not authenticated.
       setUser(null);
     }
   }, []);
 
-  // On mount: check for existing token and fetch user
+  // On mount: check for existing session (cookie-based)
   useEffect(() => {
-    if (token) {
-      fetchMe().finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
+    fetchMe().finally(() => setIsLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Holds the MFA-pending token in memory (not localStorage) until TOTP is verified.
+  // Holds the MFA-pending token in memory (not localStorage, not cookie) until TOTP is verified.
   const pendingTokenRef = useRef<string | null>(null);
 
   const login = useCallback(async (email: string, password: string) => {
     const resp = await apiLogin(email, password);
 
     if (resp.totp_required) {
-      // Store MFA-pending token only in memory — do NOT persist to localStorage.
-      // The backend will reject this token on all endpoints except TOTP verify.
+      // Store MFA-pending token only in memory — the backend already sent it
+      // in the JSON body (NOT as a cookie). We'll use it for the TOTP verify call.
       pendingTokenRef.current = resp.token;
     } else {
-      // Full session — safe to persist.
-      setToken(resp.token);
-      setTokenState(resp.token);
-
+      // Full session — the server set an HttpOnly cookie. Fetch user profile.
       const apiUser = await apiGet<ApiUser>('/api/v1/auth/me');
       setUser(transformUser(apiUser));
     }
@@ -72,26 +61,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Use the pending token explicitly for the TOTP verify call.
-    const resp = await apiVerifyTotpWithToken(code, pending);
+    // On success the server sets the HttpOnly session cookie.
+    await apiVerifyTotpWithToken(code, pending);
     pendingTokenRef.current = null;
-
-    // Now persist the fully-verified token.
-    setToken(resp.token);
-    setTokenState(resp.token);
 
     // Fetch user profile after TOTP verification.
     const apiUser = await apiGet<ApiUser>('/api/v1/auth/me');
     setUser(transformUser(apiUser));
   }, []);
 
-  const logout = useCallback(() => {
-    clearToken();
-    setTokenState(null);
+  const logout = useCallback(async () => {
+    await apiLogout(); // Clears the session cookie server-side.
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, verifyTotp, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, verifyTotp, logout }}>
       {children}
     </AuthContext.Provider>
   );
