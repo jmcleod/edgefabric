@@ -38,3 +38,8 @@ openapi/generated/
 # SPA
 web/console/node_modules/
 web/console/dist/
+
+# Tasks
+.task/checksum/build
+.task/checksum/build-spa
+.task/checksum/install-spa
